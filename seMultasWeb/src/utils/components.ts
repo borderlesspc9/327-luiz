@@ -1,0 +1,14 @@
+export { default as TableComponent } from '@/components/TableComponent.vue';
+export { default as ModalComponent } from '@/components/ModalComponent.vue';
+export { default as ButtonComponent } from '@/components/ButtonComponent.vue';
+export { default as CardComponent } from '@/components/CardComponent.vue';
+export { default as CardTitleComponent } from '@/components/CardTitleComponent.vue';
+export { default as FormGroupComponent } from '@/components/form/FormGroupComponent.vue';
+export { default as InputComponent } from '@/components/form/InputComponent.vue';
+export { default as ContainerComponent } from '@/components/ContainerComponent.vue';
+export { default as SelectComponent } from '@/components/form/SelectComponent.vue';
+export { default as LoadingComponent } from '@/components/LoadingComponent.vue';
+export { default as MultipleSelectComponent } from '@/components/MultipleSelectComponent.vue';
+export { default as LabelComponent } from '@/components/form/LabelComponent.vue';
+export { default as SearchComponent } from '@/components/SearchComponent.vue';
+export { default as PaginationComponent } from '@/components/PaginationComponent.vue';

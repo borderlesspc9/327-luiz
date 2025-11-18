@@ -1,0 +1,43 @@
+{
+    "Create user": "Criar usuário",
+    "Read user": "Ler usuário",
+    "Update user": "Atualizar usuário",
+    "Delete user": "Excluir usuário",
+
+    "Export data": "Exportar dados",
+    "Import data": "Importar dados",
+
+    "Create client": "Criar cliente",
+    "Read client": "Ler cliente",
+    "Update client": "Atualizar cliente",
+    "Delete client": "Excluir cliente",
+    "Read client file": "Ler arquivo do cliente",
+
+    "Create process": "Criar processo",
+    "Read process": "Ler processo",
+    "Update process": "Atualizar processo",
+    "Delete process": "Excluir processo",
+    "Refresh process date": "Atualizar data do processo",
+    "Work process": "Trabalhar processo",
+
+    "Create service": "Criar serviço",
+    "Read service": "Ler serviço",
+    "Update service": "Atualizar serviço",
+    "Delete service": "Excluir serviço",
+
+    "Create status": "Criar status",
+    "Read status": "Ler status",
+    "Update status": "Atualizar status",
+    "Delete status": "Excluir status",
+
+    "Create roles": "Criar papéis",
+    "Read roles": "Ler papéis",
+    "Update roles": "Atualizar papéis",
+    "Delete roles": "Excluir papéis",
+
+    "Upload File": "Enviar arquivo",
+    "Delete File": "Excluir arquivo",
+
+    "Create PDF Contract": "Criar contrato PDF",
+    "Create PDF Procuration": "Criar procuração PDF"
+}
