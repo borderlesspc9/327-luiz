@@ -6,8 +6,9 @@ export interface Client {
     nuvem: string;
     phone: string;
     cpf: string;
-    profession: string;
     rg: string;
+    rg_letter?: string | null;
+    rg_issuer?: string | null;
     state: string;
     city: string;
     address: string;
@@ -15,7 +16,6 @@ export interface Client {
     complement: string;
     process?: Process[];
     birth_date?: string | null;
-    marital_status?: string | null;
     created_at?: string;
     license_date?: string | null;
     neighborhood?: string | null;

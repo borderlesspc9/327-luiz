@@ -142,12 +142,7 @@
             <tr class="three-columns">
                 <td>CPF:</td>
                 <td>{{ $content['cpf'] }}</td>
-                <td>RG: {{ $content['rg'] }}</td>
-            </tr>
-            <tr class="three-columns">
-                <td>Estado Civil:</td>
-                <td>{{ $content['marital_status'] }}</td>
-                <td>Profissão: {{ $content['profession'] }}</td>
+                <td>RG: {{ $content['rg'] }}{{ $content['rg_letter'] ? $content['rg_letter'] : '' }} {{ $content['rg_issuer'] ? '/ ' . $content['rg_issuer'] : '' }}</td>
             </tr>
             <tr class="two-columns">
                 <td>Endereço:</td>

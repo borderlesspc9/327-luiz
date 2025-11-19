@@ -10,7 +10,6 @@ import {
     CardComponent,
     LoadingComponent,
     PaginationComponent,
-    SelectComponent,
     LabelComponent
 } from '@/utils/components';
 import type { Action } from '@/interfaces/actions.interface';
@@ -26,8 +25,10 @@ import { useAcl } from '@/utils/acl';
 
 import SearchComponent from '@/components/SearchComponent.vue';
 import IconComponent from '@/components/IconComponent.vue';
+import { useToast } from 'vue-toastification';
 
 const clientStore = useClientStore();
+const toast = useToast();
 
 const clients = ref<Pagination>({
     current_page: 0,
@@ -65,9 +66,9 @@ const formData = (data: any = {}) => {
         phone: data.phone || '',
         cpf: data.cpf || '',
         cep: data.cep || '',
-        profession: data.profession || '',
         rg: data.rg || '',
-        marital_status: data.marital_status || '',
+        rg_letter: data.rg_letter || '',
+        rg_issuer: data.rg_issuer || '',
         birth_date: data.birth_date || '',
         license_date: data.license_date || '',
         state: data.state || '',
@@ -384,13 +385,6 @@ const handleCepChange = async (cep: string) => {
     }
 };
 
-const maritualStatus = [
-    { value: 'Solteiro', text: 'Solteiro' },
-    { value: 'Casado', text: 'Casado' },
-    { value: 'Divorciado', text: 'Divorciado' },
-    { value: 'Viúvo', text: 'Viúvo' },
-    { value: 'Separado', text: 'Separado' },
-];
 
 const imagePreview = (file) => {
     if (file) {
@@ -422,6 +416,31 @@ const getFileType = (file: File | null) => {
     }
 };
 
+const formatDateToBrazilian = (dateString: string): string => {
+    if (!dateString) return '';
+    // Converte de YYYY-MM-DD para DD/MM/YYYY
+    const [year, month, day] = dateString.split('-');
+    return `${day}/${month}/${year}`;
+};
+
+const copyDateToClipboard = (dateString: string, fieldName: string) => {
+    if (!dateString) {
+        toast.warning(`Não há data de ${fieldName} para copiar`);
+        return;
+    }
+    
+    const formattedDate = formatDateToBrazilian(dateString);
+    
+    const el = document.createElement('textarea');
+    el.value = formattedDate;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+    
+    toast.success(`Data de ${fieldName} copiada: ${formattedDate}`);
+};
+
 </script>
 
 <template>
@@ -445,13 +464,13 @@ const getFileType = (file: File | null) => {
         </div>
 
         <div class="row">
-            <div class="col-5">
+            <div class="col-4">
                 <FormGroupComponent>
                     <LabelComponent text="CPF" for="cpf" />
                     <InputComponent v-model="form.cpf" v-maska="'###.###.###-##'" placeholder="CPF" type="text" />
                 </FormGroupComponent>
             </div>
-            <div class="col-5">
+            <div class="col-3">
                 <FormGroupComponent>
                     <LabelComponent text="RG" for="rg" />
                     <InputComponent v-model="form.rg" v-maska="'##########'" placeholder="RG" type="text" />
@@ -459,29 +478,52 @@ const getFileType = (file: File | null) => {
             </div>
             <div class="col-2">
                 <FormGroupComponent>
-                    <LabelComponent text="Data de nascimento" for="birth_date" />
-                    <InputComponent v-model="form.birth_date" placeholder="Data de nascimento" type="date" />
+                    <LabelComponent text="Letra" for="rg_letter" />
+                    <InputComponent v-model="form.rg_letter" placeholder="Letra" type="text" maxlength="1" />
+                </FormGroupComponent>
+            </div>
+            <div class="col-3">
+                <FormGroupComponent>
+                    <LabelComponent text="Órgão Expedidor" for="rg_issuer" />
+                    <InputComponent v-model="form.rg_issuer" placeholder="Órgão Expedidor" type="text" />
                 </FormGroupComponent>
             </div>
         </div>
 
         <div class="row">
-            <div class="col-4">
+            <div class="col-12">
                 <FormGroupComponent>
-                    <LabelComponent text="Estado civil" for="marital_status" />
-                    <SelectComponent v-model="form.marital_status" placeholder="Estado civil" :options="maritualStatus" />
+                    <LabelComponent text="Data de nascimento" for="birth_date" />
+                    <div class="input-with-copy">
+                        <InputComponent v-model="form.birth_date" placeholder="Data de nascimento" type="date" />
+                        <button 
+                            type="button" 
+                            class="btn-copy-date" 
+                            @click="copyDateToClipboard(form.birth_date, 'nascimento')"
+                            title="Copiar data"
+                        >
+                            <IconComponent class="svg" name="copy" />
+                        </button>
+                    </div>
                 </FormGroupComponent>
             </div>
-            <div class="col-3">
+        </div>
+
+        <div class="row">
+            <div class="col-12">
                 <FormGroupComponent>
                     <LabelComponent text="Data da primeira habilitação" for="license_date" />
-                    <InputComponent v-model="form.license_date" placeholder="Data da primeira habilitação" type="date" />
-                </FormGroupComponent>
-            </div>
-            <div class="col-5">
-                <FormGroupComponent>
-                    <LabelComponent text="Profissão" for="profession" />
-                    <InputComponent v-model="form.profession" placeholder="Profissão" type="text"/>
+                    <div class="input-with-copy">
+                        <InputComponent v-model="form.license_date" placeholder="Data da primeira habilitação" type="date" />
+                        <button 
+                            type="button" 
+                            class="btn-copy-date" 
+                            @click="copyDateToClipboard(form.license_date, 'primeira habilitação')"
+                            title="Copiar data"
+                        >
+                            <IconComponent class="svg" name="copy" />
+                        </button>
+                    </div>
                 </FormGroupComponent>
             </div>
         </div>
@@ -644,3 +686,45 @@ const getFileType = (file: File | null) => {
     </ContainerComponent>
 
 </template>
+
+<style scoped>
+.input-with-copy {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+}
+
+.input-with-copy :deep(.form-control) {
+    flex: 1;
+}
+
+.btn-copy-date {
+    background-color: transparent;
+    border: none;
+    padding: 4px 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    opacity: 0.6;
+    color: #6c757d;
+}
+
+.btn-copy-date:hover {
+    opacity: 1;
+    background-color: #f8f9fa;
+    color: #495057;
+}
+
+.btn-copy-date:active {
+    transform: scale(0.95);
+}
+
+.btn-copy-date .svg {
+    width: 16px;
+    height: 16px;
+}
+</style>

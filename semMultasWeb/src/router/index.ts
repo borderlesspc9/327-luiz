@@ -87,50 +87,62 @@ const router = createRouter({
 })
 
 router.beforeEach((to, from, next) => {
+  // Allow access to login and logout routes without authentication
+  if (to.name === 'login' || to.name === 'logout') {
+    return next();
+  }
+
   const token = cache.getToken();
 
   if (!token) {
-    if (to.name !== 'login') {
-      return next({ name: 'login' });
-    } else {
-      return next();
-    }
+    return next({ name: 'login' });
   }
 
   try {
+    // Check if token is valid
+    const decodedToken = jwtDecode(token);
+    const currentTime = Date.now() / 1000;
 
-  // Check if token is valid
-  const decodedToken = jwtDecode(token);
-  const currentTime = Date.now() / 1000;
-
-  if (!decodedToken.exp || decodedToken.exp < currentTime) {
-    // Token has expired
-    cache.clearStorage();
-    return next({ name: 'login' });
-  }
-  //end check token
-
-  // Check if user has permission to access the route
-  const requiredPermission = to.meta?.permission;
-
-  const getAuth = cache.getUser();
-  const user = JSON.parse(getAuth);
-  const roles = user?.roles || [];
-  let hasPermission = null;
-
-  if(requiredPermission) {
-    hasPermission = roles.some((role: any) => {
-      return role.permissions.some((permission: {name: string}) => permission.name === requiredPermission)
-    });
-
-    if(!hasPermission) {
-      return next('/404');
+    if (!decodedToken.exp || decodedToken.exp < currentTime) {
+      // Token has expired
+      cache.clearStorage();
+      return next({ name: 'login' });
     }
-  }
+    //end check token
 
-  //enc check permission
+    // Check if user has permission to access the route
+    const requiredPermission = to.meta?.permission;
+
+    if (requiredPermission) {
+      const getAuth = cache.getUser();
+      
+      if (!getAuth) {
+        cache.clearStorage();
+        return next({ name: 'login' });
+      }
+
+      try {
+        const user = JSON.parse(getAuth);
+        const roles = user?.roles || [];
+        
+        const hasPermission = roles.some((role: any) => {
+          return role.permissions.some((permission: {name: string}) => permission.name === requiredPermission)
+        });
+
+        if(!hasPermission) {
+          return next({ name: 'not-found' });
+        }
+      } catch (parseError) {
+        // If user data is invalid, clear storage and redirect to login
+        cache.clearStorage();
+        return next({ name: 'login' });
+      }
+    }
+
+    //enc check permission
   } catch (error) {
-
+    // If token is invalid or any other error, clear storage and redirect to login
+    cache.clearStorage();
     return next({ name: 'login' });
   }
 
