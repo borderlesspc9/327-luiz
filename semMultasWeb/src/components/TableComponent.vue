@@ -6,6 +6,9 @@ import { useRoute } from 'vue-router';
 import IconComponent from './IconComponent.vue';
 import InputComponent from './form/InputComponent.vue';
 import LabelComponent from './form/LabelComponent.vue';
+import { useToast } from 'vue-toastification';
+
+const toast = useToast();
 
 const props = defineProps({
     items: {
@@ -97,6 +100,21 @@ const filteredLinks = computed(() => {
     return props.pagination?.links?.filter(link => !link.label.includes('Previous') && !link.label.includes('Next')) ?? [];
 });
 
+const copyToClipboard = (value: string) => {
+    if (!value) {
+        toast.warning('Não há data para copiar');
+        return;
+    }
+    
+    const el = document.createElement('textarea');
+    el.value = value;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+    toast.success('Data da primeira habilitação copiada: ' + value);
+};
+
 </script>
 
 <template>
@@ -122,7 +140,13 @@ const filteredLinks = computed(() => {
                         :title="key === 'deadline_date' ? getTitle(value) : ''"
                         v-if="key != 'slug' && key != 'id'"
                     >
-                        {{ value }}
+                        <template v-if="key === 'Data 1º habilitação'">
+                            {{ value }}
+                            <ButtonComponent icon="copy" @click.stop="copyToClipboard(value)"></ButtonComponent>
+                        </template>
+                        <template v-else>
+                            {{ value }}
+                        </template>
                     </td>
                     </template>
                     <td class="td-actions" v-if="actions && actions.length > 0">

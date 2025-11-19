@@ -33,7 +33,7 @@ const emitUpdateSearch = (value: string) => {
                 <input 
                     type="text" 
                     class="form-control" 
-                    placeholder="Search..." 
+                    placeholder="Buscar..." 
                     aria-label="Example text with button addon" 
                     aria-describedby="button-addon1"
                     @input="handleInput"

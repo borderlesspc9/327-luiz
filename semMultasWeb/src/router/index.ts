@@ -11,6 +11,58 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
+      path: '/preview',
+      name: 'preview',
+      component: DashboardLayout,
+      children: [
+        {
+          path: '',
+          name: 'preview-page',
+          component: () => import('@/views/pages/preview/Preview.vue')
+        },
+        {
+          path: 'dashboard',
+          name: 'preview-dashboard',
+          component: () => import('@/views/pages/preview/DashboardPreview.vue')
+        },
+        {
+          path: 'process',
+          name: 'preview-process',
+          component: () => import('@/views/pages/preview/ProcessPreview.vue')
+        },
+        {
+          path: 'status',
+          name: 'preview-status',
+          component: () => import('@/views/pages/preview/StatusPreview.vue')
+        },
+        {
+          path: 'clients',
+          name: 'preview-clients',
+          component: () => import('@/views/pages/preview/ClientsPreview.vue')
+        },
+        {
+          path: 'services',
+          name: 'preview-services',
+          component: () => import('@/views/pages/preview/ServicePreview.vue')
+        },
+        {
+          path: 'roles',
+          name: 'preview-roles',
+          component: () => import('@/views/pages/preview/RolesPreview.vue')
+        },
+        {
+          path: 'users',
+          name: 'preview-users',
+          component: () => import('@/views/pages/preview/UsersPreview.vue')
+        },
+        {
+          path: 'search',
+          name: 'preview-search',
+          component: () => import('@/views/pages/preview/SearchPreview.vue')
+        }
+      ]
+    },
+    {
       path: '/login',
       name: 'login',
       component: () => import('@/views/pages/auth/Login.vue')
@@ -87,8 +139,8 @@ const router = createRouter({
 })
 
 router.beforeEach((to, from, next) => {
-  // Allow access to login and logout routes without authentication
-  if (to.name === 'login' || to.name === 'logout') {
+  // Allow access to login, logout and preview routes without authentication
+  if (to.name === 'login' || to.name === 'logout' || to.name === 'preview' || to.name === 'preview-page' || to.path.startsWith('/preview')) {
     return next();
   }
 

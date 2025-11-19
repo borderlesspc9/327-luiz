@@ -24,12 +24,12 @@ class ClientRequest extends FormRequest
         $client = $this->route('client');
         
         return [
-            'name' => 'required',
+            'name' => 'nullable',
             'nuvem' => 'nullable',
             'phone' => 'nullable',
             'birth_date' => 'nullable',
             'license_date' => 'nullable|date',
-            'cpf' => 'required|unique:clients,cpf,' . ($client ? $client->id : 'NULL'),
+            'cpf' => 'nullable|unique:clients,cpf,' . ($client ? $client->id : 'NULL'),
             'cep' => 'nullable',
             'rg' => 'nullable',
             'rg_letter' => 'nullable|max:1',
@@ -51,8 +51,6 @@ class ClientRequest extends FormRequest
     public function messages(): array
     {   
         return [
-            'name.required' => 'Nome do cliente é obrigatório',
-            'cpf.required' => 'CPF do cliente é obrigatório',
             'cpf.unique' => 'CPF já cadastrado',
         ];
     }

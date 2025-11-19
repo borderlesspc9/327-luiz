@@ -50,7 +50,16 @@ const toggleModalUser = () => {
     dropdownOpenUser.value = false;
 }
 
-const user = JSON.parse(localStorage.getItem('user') || '{}');
+const getUser = () => {
+    try {
+        const userStr = localStorage.getItem('user');
+        return userStr ? JSON.parse(userStr) : { name: 'Usuário', email: '' };
+    } catch {
+        return { name: 'Usuário', email: '' };
+    }
+};
+
+const user = getUser();
 
 const initialLetter = computed(() => {
     return user.name ? user.name.charAt(0).toUpperCase() : '';
@@ -83,7 +92,7 @@ const navigateToResult = () => {
                     <input 
                         type="text" 
                         class="form-control" 
-                        placeholder="Search..." 
+                        placeholder="Buscar..." 
                         aria-label="Example text with button addon" 
                         aria-describedby="button-addon1" 
                         v-model="searchQuery"

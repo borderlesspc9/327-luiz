@@ -99,7 +99,7 @@ const loadData = async () => {
                             <span>Data limite:</span><span>{{ process.deadline_date }}</span>
                         </div>
                         <div class="card-text card-flex">
-                            <span>Número do processo:</span><span>{{ process.process_number }}</span>
+                            <span>Número do Processamento:</span><span>{{ process.process_number }}</span>
                         </div>
                     </div>
                 </div>

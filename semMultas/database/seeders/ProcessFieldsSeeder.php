@@ -75,7 +75,7 @@ class ProcessFieldsSeeder extends Seeder
                 'type' => 'text',
                 'required' => true,
                 'mask' => '',
-                'description' => 'Número do processo',
+                'description' => 'Número do Processamento',
             ],
         ];
 

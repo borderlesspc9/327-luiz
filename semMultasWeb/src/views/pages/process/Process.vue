@@ -425,9 +425,9 @@ const handleUpdateStatusModal = () => {
 //     status: "Status",
 //     renavam: "Renavam",
 //     state_plate: "Estado da placa",
-//     agency: "Agência",
+//     agency: "Órgão",
 //     observation: "Observação",
-//     process_number: "Número do processo",
+//     process_number: "Número do Processamento",
 // };
 
 const getFilledFields = (item: any) => {

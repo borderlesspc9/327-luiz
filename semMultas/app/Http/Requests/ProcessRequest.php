@@ -23,8 +23,8 @@ class ProcessRequest extends FormRequest
     {
         return [
             'user_id' => 'nullable|exists:users,id',
-            'client_id' => 'required|exists:clients,id',
-            'service_id' => 'required|exists:services,id',
+            'client_id' => 'nullable|exists:clients,id',
+            'service_id' => 'nullable|exists:services,id',
             'seller_id' => 'nullable|exists:users,id',
             'plate' => 'nullable|string',
             'chassis' => 'nullable|string',
@@ -32,12 +32,12 @@ class ProcessRequest extends FormRequest
             'state_plate' => 'nullable|string',
             'infraction_code' => 'nullable|string',
             'agency' => 'nullable|string',
-            'ait' => 'required|string',
-            'process_value' => 'required|numeric',
-            'payment_method' => 'required|string',
+            'ait' => 'nullable|string',
+            'process_value' => 'nullable|numeric',
+            'payment_method' => 'nullable|string',
             'observation' => 'nullable|string',
             'process_number' => 'nullable|string',
-            'deadline_date' => 'required|date',
+            'deadline_date' => 'nullable|date',
             'status_id' => 'nullable',
             
             // Parâmetros de busca
@@ -63,9 +63,7 @@ class ProcessRequest extends FormRequest
         return [
             'user_id.exists' => 'O usuário informado não existe.',
             'seller_id.exists' => 'O vendedor informado não existe.',
-            'client_id.required' => 'O cliente é obrigatório.',
             'client_id.exists' => 'O cliente informado não existe.',
-            'service_id.required' => 'O serviço é obrigatório.',
             'service_id.exists' => 'O serviço informado não existe.',
             'plate.string' => 'A placa deve ser uma string.',
             'chassis.string' => 'O chassi deve ser uma string.',
@@ -77,10 +75,8 @@ class ProcessRequest extends FormRequest
             'process_value.numeric' => 'O valor do processo deve ser um número.',
             'payment_method.string' => 'O método de pagamento deve ser uma string.',
             'observation.string' => 'A observação deve ser uma string.',
-            'process_number.string' => 'O número do processo deve ser uma string.',
+            'process_number.string' => 'O número do processamento deve ser uma string.',
             'deadline_date.date' => 'A data de vencimento deve ser uma data válida.',
-            'deadline_date.required' => 'A data de vencimento é obrigatória.',
-            'ait.required' => 'o AIT é obrigatório.',
         ];
     }
 }
