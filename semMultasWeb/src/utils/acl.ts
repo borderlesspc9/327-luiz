@@ -1,10 +1,21 @@
 import { useCache } from "./cache";
+import { useRoute } from "vue-router";
 
 const cache = useCache();
 
 export function useAcl() {
+    const route = useRoute();
+    
+    const isPreviewMode = () => {
+        return route.path.startsWith('/preview');
+    };
     
     const getUserPermissions = () => {
+        // In preview mode, return all permissions
+        if (isPreviewMode()) {
+            return ['*']; // Special permission that matches all
+        }
+        
         try {
             const userStr = cache.getUser();
             if (!userStr) return [];
@@ -23,6 +34,11 @@ export function useAcl() {
     }
     
     const hasPermissionTo = (permission: string | Array<string>): boolean => {
+        // In preview mode, always return true
+        if (isPreviewMode()) {
+            return true;
+        }
+        
         const userPermissions = getUserPermissions();
 
         if (Array.isArray(permission)) {

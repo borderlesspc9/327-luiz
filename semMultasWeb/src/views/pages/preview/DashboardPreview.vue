@@ -54,6 +54,7 @@ const confirmDelete = () => {
     }
     closeDeleteModal();
 };
+
 </script>
 
 <template>
@@ -76,4 +77,3 @@ const confirmDelete = () => {
         </CardComponent>
     </ContainerComponent>
 </template>
-

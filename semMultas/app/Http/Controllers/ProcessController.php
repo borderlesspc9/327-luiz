@@ -245,6 +245,24 @@ class ProcessController extends Controller
         }
     }
 
+    public function getUniqueAgencies()
+    {
+        try {
+            $agencies = Process::whereNotNull('agency')
+                ->where('agency', '!=', '')
+                ->distinct()
+                ->orderBy('agency', 'asc')
+                ->pluck('agency')
+                ->filter()
+                ->values()
+                ->toArray();
+            
+            return $this->defaultResponse->successWithContent('Agencies found', 200, $agencies);
+        } catch (\Exception $e) {
+            throw new CustomException($e->getMessage());
+        }
+    }
+
     protected function UpdateProcessInRealTime($params, $process)
     {
         try {

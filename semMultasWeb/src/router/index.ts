@@ -139,8 +139,11 @@ const router = createRouter({
 })
 
 router.beforeEach((to, from, next) => {
-  // Allow access to login, logout and preview routes without authentication
-  if (to.name === 'login' || to.name === 'logout' || to.name === 'preview' || to.name === 'preview-page' || to.path.startsWith('/preview')) {
+  // Allow access to login, logout and all preview routes without authentication
+  const isPreviewRoute = to.path.startsWith('/preview') || 
+                         (to.name && to.name.toString().startsWith('preview'));
+  
+  if (to.name === 'login' || to.name === 'logout' || isPreviewRoute) {
     return next();
   }
 

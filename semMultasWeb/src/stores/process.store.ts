@@ -24,17 +24,29 @@ export const useProcessStore = defineStore({
         processes: {} as Pagination,
         process: undefined as Process,
         totalToday: 0,
+        uniqueAgencies: [] as string[],
     }),
     getters: {
         getProcesses: (state) => state.processes,
         getProcess: (state) => state.process,
         getTotalToday: (state) => state.totalToday,
+        getUniqueAgencies: (state) => state.uniqueAgencies,
     },
     actions: {
         async index(params: any) {
             const result = await index(endpoint.index, params);
             this.processes = result.data;
             this.setTotalToday();
+        },
+        async fetchUniqueAgencies() {
+            try {
+                const result = await index(`${endpoint.index}/agencies/unique`, {});
+                this.uniqueAgencies = result.data || [];
+                return this.uniqueAgencies;
+            } catch (error) {
+                console.error('Error fetching unique agencies:', error);
+                return [];
+            }
         },
         async show(slug: string) {
             this.process = await show(endpoint.withSlug.replace('slug', slug));

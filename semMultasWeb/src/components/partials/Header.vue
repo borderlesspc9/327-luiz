@@ -4,10 +4,11 @@ import IconShearch from '../icons/IconShearch.vue';
 import IconComponent from '../IconComponent.vue';
 import ModalComponent from '../ModalComponent.vue';
 import UserProfileForm from '../UserProfileForm.vue';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 
 const toggleMenu = inject('toggleMenu') as () => void;
 const isOpen = inject('isOpen');
+const route = useRoute();
 
 const getRandomColor = () => {
     const letters = '0123456789ABCDEF';
@@ -71,8 +72,16 @@ const userData = ref({
     password: ''
 });
 
+const isPreviewRoute = computed(() => {
+    return route.path.startsWith('/preview');
+});
+
 const navigateToResult = () => {
-    router.push({ path: '/painel/search', query: { q: searchQuery.value } });
+    if (isPreviewRoute.value) {
+        router.push({ path: '/preview/search', query: { q: searchQuery.value } });
+    } else {
+        router.push({ path: '/painel/search', query: { q: searchQuery.value } });
+    }
 };
 </script>
 

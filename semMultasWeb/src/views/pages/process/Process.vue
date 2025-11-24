@@ -13,6 +13,7 @@ import {
   SearchComponent,
   PaginationComponent
 } from '@/utils/components';
+import AutocompleteComponent from '@/components/form/AutocompleteComponent.vue';
 import { onMounted, ref, computed } from 'vue';
 import type { Pagination } from '@/interfaces/pagination/pagination.interface';
 import type { Action } from '@/types/ActionType';
@@ -102,6 +103,7 @@ const clientSelectData = ref([]);
 const statusSelectData = ref([]);
 
 const sellerSelectData = ref([]);
+const agenciesList = ref<string[]>([]);
 
 const totalProcessToday = computed(() => processStore.getTotalToday);
 
@@ -120,6 +122,7 @@ const loadProcesses = async () => {
     await processStore.index(params.value);
     processStore.connectSocketIO();
     processes.value = processStore.getProcesses;
+    // Force refresh of table data to ensure updated deadline_date is displayed
     prepareDataToTable();
 };
 
@@ -164,14 +167,14 @@ const prepareDataToTable = () => {
             id: process.id,
             slug: process.slug,
             AIT: process.ait,
-            'Data limite': process.deadline_date,
+            'Data limite': formatDateToDisplay(process.deadline_date), // Format to DD/MM/YYYY
             Serviço: process.service?.name,
             Placa: process.plate,
             Chassi: process.chassis,
             Renavam: process.renavam,
             'Nome do cliente': process.client?.name,
             CPF: process.client?.cpf,
-            'Data de nascimento': process.client?.birth_date,
+            'Data de nascimento': process.client?.birth_date ? formatDateToDisplay(process.client.birth_date) : process.client?.birth_date,
             status: process.status,
         }
     })
@@ -236,6 +239,16 @@ const handleSellerData = async () => {
     sellerSelectData.value = prepareSelectData(sellers);
 };
 
+const loadAgencies = async () => {
+    try {
+        const agencies = await processStore.fetchUniqueAgencies();
+        agenciesList.value = agencies || [];
+    } catch (error) {
+        console.error('Error loading agencies:', error);
+        agenciesList.value = [];
+    }
+};
+
 const prepareSelectData = (data: any) => {
     return data.map((item: any) => {
         return {
@@ -258,12 +271,13 @@ const actions: Action[] = [
     {
         name: 'edit',
         hasPermission: hasPermissionTo('Update process'),
-        action: (item) => {
+        action: async (item) => {
             form.value = formData(getItemById(item.id));
             form.value.deadline_date = formatDateToISO(form.value.deadline_date);
             form.value.status_id = getItemById(item.id).status[0].id;
             console.log('form', form.value);
             
+            await loadAgencies();
             handleProcessList();
             showModal.value = true;
         },
@@ -331,12 +345,25 @@ const handleModalTitle = () => {
 
 const handleSubmit = async() => {
     isLoading.value = true;
+    
+    // Prepare payload ensuring deadline_date is in the correct format
+    const { updateDeadLine, ...formDataWithoutUpdateDeadLine } = form.value;
+    const payload = {
+        ...formDataWithoutUpdateDeadLine,
+        // Ensure deadline_date is in ISO format (YYYY-MM-DD) if present
+        deadline_date: form.value.deadline_date ? formatDateToISO(form.value.deadline_date) : form.value.deadline_date,
+        params: params.value
+    };
+    
     if(form.value.slug) {
-        await processStore.update(form.value.slug, { ...form.value, params: params.value });
+        await processStore.update(form.value.slug, payload);
     }else{
-        await processStore.store({ ...form.value, params: params.value });
+        await processStore.store(payload);
     }
+    
+    // Reload processes to get updated data from backend, including the updated deadline_date
     await loadProcesses();
+    
     isLoading.value = false;
     form.value = formData();
     processFields.value = [];
@@ -345,11 +372,28 @@ const handleSubmit = async() => {
 const handleSubmitStatus = async() => {
     if(currentItem.value && currentItem.value.slug) {
         isLoading.value = true;
-        await processStore.update(`update-status/${currentItem.value.slug}`, { ...form.value, params: params.value });
+        
+        // Prepare payload ensuring deadline_date is in the correct format when updateDeadLine is true
+        const payload = {
+            ...form.value,
+            // Ensure deadline_date is in ISO format (YYYY-MM-DD) if updateDeadLine is true and deadline_date is present
+            deadline_date: (form.value.updateDeadLine && form.value.deadline_date) 
+                ? formatDateToISO(form.value.deadline_date) 
+                : form.value.deadline_date,
+            params: params.value
+        };
+        
+        await processStore.update(`update-status/${currentItem.value.slug}`, payload);
+        
+        // Reload processes to get updated data from backend, including the updated deadline_date
+        await loadProcesses();
+        
         isLoading.value = false;
+        showUpdateStatusModal.value = false;
+        form.value.status_id = '';
+        form.value.updateDeadLine = false;
+        form.value.deadline_date = ''; // Reset deadline_date after submission
     }
-
-    await loadProcesses();
 }
 
 const handleDelete = async () => {
@@ -411,6 +455,7 @@ const handleUpdateStatusModal = () => {
     currentItem.value = null;
     form.value.status_id = '';
     form.value.updateDeadLine = false;
+    form.value.deadline_date = ''; // Reset deadline_date when closing modal
 };
 
 // const translations = {
@@ -461,6 +506,11 @@ const getFilledFields = (item: any) => {
 
             if (key == 'service') {
                 value = item.service ? item.service.name : 'Serviço não disponível';
+            }
+
+            // Format deadline_date to DD/MM/YYYY for display
+            if (key == 'deadline_date' && value) {
+                value = formatDateToDisplay(value);
             }
 
             fields.push({ label: key, value });
@@ -536,7 +586,9 @@ const handleRowClick = (item: any) => {
     if(hasPermissionTo('Work process')){
         const activeStatus = item.status?.find((status: any) => status.pivot?.is_active === 1);
         currentItem.value = item;
-        form.value.deadline_date = item.deadline_date
+        // Format deadline_date to ISO format for the date input
+        form.value.deadline_date = item.deadline_date ? formatDateToISO(item.deadline_date) : item.deadline_date;
+        form.value.updateDeadLine = false; // Reset updateDeadLine flag
 
         if (activeStatus) {
             form.value.status_id = activeStatus.id;
@@ -591,8 +643,64 @@ const moneyConfig = {
 }
 
 const formatDateToISO = (date: string) => {
-    const [day, month, year] = date.split('/');
-    return `${year}-${month}-${day}`;
+    if (!date) return '';
+    
+    // Se já está no formato ISO (YYYY-MM-DD), retorna direto
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return date;
+    }
+    
+    // Se está no formato DD/MM/YYYY, converte para ISO
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(date)) {
+        const [day, month, year] = date.split('/');
+        return `${year}-${month}-${day}`;
+    }
+    
+    // Tenta converter de qualquer formato de data válido
+    try {
+        const dateObj = new Date(date);
+        if (!isNaN(dateObj.getTime())) {
+            const year = dateObj.getFullYear();
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+    } catch (e) {
+        console.error('Error formatting date:', e);
+    }
+    
+    return date; // Retorna o valor original se não conseguir converter
+}
+
+// Format date to DD/MM/YYYY for display
+const formatDateToDisplay = (date: string) => {
+    if (!date) return '';
+    
+    // Se já está no formato DD/MM/YYYY, retorna direto
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(date)) {
+        return date;
+    }
+    
+    // Se está no formato ISO (YYYY-MM-DD), converte para DD/MM/YYYY
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        const [year, month, day] = date.split('-');
+        return `${day}/${month}/${year}`;
+    }
+    
+    // Tenta converter de qualquer formato de data válido
+    try {
+        const dateObj = new Date(date);
+        if (!isNaN(dateObj.getTime())) {
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const year = dateObj.getFullYear();
+            return `${day}/${month}/${year}`;
+        }
+    } catch (e) {
+        console.error('Error formatting date for display:', e);
+    }
+    
+    return date; // Retorna o valor original se não conseguir converter
 }
 
 </script>
@@ -842,7 +950,7 @@ const formatDateToISO = (date: string) => {
                 <div class="button-group">
                     <ButtonComponent buttonClass="btn-secondary btn-import" text="Importar" icon="file-upload" light @click="showModalImportFile = true" v-if="hasPermissionTo('Import data')" />
                     <ButtonComponent buttonClass="btn-secondary btn-export" text="Exportar" icon="file-download" light @click="handleExport()" v-if="hasPermissionTo('Export data')" />
-                    <ButtonComponent buttonClass="btn-secondary" text="Adicionar" icon="plus" light @click="showModal = true" v-if="hasPermissionTo('Create process')" />
+                    <ButtonComponent buttonClass="btn-secondary" text="Adicionar" icon="plus" light @click="handleAddClick" v-if="hasPermissionTo('Create process')" />
                 </div>
             </template>
             
