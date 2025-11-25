@@ -26,8 +26,10 @@ export const store = async (url: string, data: object) => {
     try {
         const response = await axiosInstance.post(url, data);
         toast.success(response.data.message);
+        return response.data; // Return response data on success
     } catch (error: any) {
         toast.error(error.response.data.message);
+        throw error;
     }
 }
 

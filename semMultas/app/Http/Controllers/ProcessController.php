@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Process;
+use App\Models\Client;
 use Illuminate\Http\Request;
 use App\Interface\GlobalRepositoryInterface;
 use App\Http\Requests\IndexRequest;
@@ -12,7 +13,7 @@ use App\Http\Requests\ProcessRequest;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use App\Service\PdfService;
-use \GuzzleHttp\Client;
+use GuzzleHttp\Client as GuzzleClient;
 
 class ProcessController extends Controller
 {
@@ -83,6 +84,36 @@ class ProcessController extends Controller
             $payload = $request->validated();
             $payload['slug'] = Process::uniqueSlug('processo-' . $payload['process_number']);
             $payload['user_id'] = Auth::user()->id;
+
+            // Se não houver client_id, criar ou buscar cliente padrão '(vazio)'
+            if (empty($payload['client_id']) || $payload['client_id'] === null || $payload['client_id'] === '') {
+                $defaultClient = Client::where('name', '(vazio)')->first();
+                
+                if (!$defaultClient) {
+                    $slug = Client::uniqueSlug('vazio');
+                    $defaultClient = Client::create([
+                        'name' => '(vazio)',
+                        'nuvem' => null,
+                        'phone' => null,
+                        'birth_date' => null,
+                        'license_date' => null,
+                        'cpf' => null,
+                        'rg' => null,
+                        'rg_letter' => null,
+                        'rg_issuer' => null,
+                        'cep' => null,
+                        'state' => null,
+                        'city' => null,
+                        'neighborhood' => null,
+                        'address' => null,
+                        'number' => null,
+                        'complement' => null,
+                        'slug' => $slug,
+                    ]);
+                }
+                
+                $payload['client_id'] = $defaultClient->id;
+            }
 
             $process = $this->globalRepository->create($payload);
 
@@ -263,6 +294,33 @@ class ProcessController extends Controller
         }
     }
 
+    public function getByPlate(Request $request)
+    {
+        try {
+            $plate = $request->input('plate');
+            
+            if (empty($plate)) {
+                return $this->defaultResponse->isSuccess('Placa não informada.', 400);
+            }
+            
+            // Buscar o processo mais recente com essa placa
+            $process = Process::where('plate', $plate)
+                ->orderBy('created_at', 'desc')
+                ->first();
+            
+            if ($process) {
+                return $this->defaultResponse->successWithContent('Processo encontrado', 200, [
+                    'chassis' => $process->chassis,
+                    'renavam' => $process->renavam
+                ]);
+            }
+            
+            return $this->defaultResponse->successWithContent('Nenhum processo encontrado', 200, null);
+        } catch (\Exception $e) {
+            throw new CustomException($e->getMessage());
+        }
+    }
+
     protected function UpdateProcessInRealTime($params, $process)
     {
         try {
@@ -293,7 +351,7 @@ class ProcessController extends Controller
                 'user' => Auth::user()
             ];
             
-            $client = new Client();
+            $client = new GuzzleClient();
             $client->post(config('services.front_communication.url') . '/proccess', [
                 'json' => $data
             ]);

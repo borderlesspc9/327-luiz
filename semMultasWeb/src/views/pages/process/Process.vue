@@ -14,7 +14,7 @@ import {
   PaginationComponent
 } from '@/utils/components';
 import AutocompleteComponent from '@/components/form/AutocompleteComponent.vue';
-import { onMounted, ref, computed } from 'vue';
+import { onMounted, ref, computed, watch } from 'vue';
 import type { Pagination } from '@/interfaces/pagination/pagination.interface';
 import type { Action } from '@/types/ActionType';
 import { useProcessStore } from '@/stores/process.store';
@@ -33,6 +33,7 @@ import SwitchComponent from '@/components/form/SwitchComponent.vue';
 import TableComponentProcess from '@/components/TableComponentProcess.vue';
 import IconComponent from '@/components/IconComponent.vue';
 import { Process } from '@/interfaces/process.interface';
+import { index } from '@/utils/generalAPI';
 
 const params = ref<RequestParams>({
     without_pagination: 0,
@@ -49,10 +50,10 @@ const isLoading = ref(false);
 const formData = (data: any = {}) => {
     return {
         user_id: data.user_id || '',
-        client_id: data.client_id || '',
-        status_id: data.client_id || '',
-        seller_id: data.seller_id || '',
-        service_id: data.service_id || '',
+        client_id: data.client_id || null,
+        status_id: data.status_id || null,
+        seller_id: data.seller_id || null,
+        service_id: data.service_id || null,
         plate: data.plate || '',
         chassis: data.chassis || '',
         renavam: data.renavam || '',
@@ -104,6 +105,9 @@ const statusSelectData = ref([]);
 
 const sellerSelectData = ref([]);
 const agenciesList = ref<string[]>([]);
+const statusTitlesList = ref<string[]>([]);
+const statusTitleToIdMap = ref<Record<string, number>>({});
+const statusTitle = ref<string>('');
 
 const totalProcessToday = computed(() => processStore.getTotalToday);
 
@@ -117,6 +121,33 @@ onMounted(async () => {
     await handleSellerData();
     await handleStatus();
 })
+
+// Watcher para buscar chassi e renavam quando a placa for digitada
+watch(() => form.value.plate, async (newPlate, oldPlate) => {
+    // Só buscar se:
+    // 1. A placa foi alterada
+    // 2. Não estamos editando (não tem slug)
+    // 3. A placa tem pelo menos 3 caracteres
+    // 4. Os campos chassi e renavam estão vazios
+    if (newPlate && newPlate !== oldPlate && !form.value.slug && newPlate.length >= 3) {
+        if (!form.value.chassis && !form.value.renavam) {
+            await fetchProcessByPlate(newPlate);
+        }
+    }
+});
+
+const fetchProcessByPlate = async (plate: string) => {
+    try {
+        const result = await index('/processes/by-plate', { plate } as any);
+        if (result && result.data && result.data.chassis && result.data.renavam) {
+            form.value.chassis = result.data.chassis;
+            form.value.renavam = result.data.renavam;
+        }
+    } catch (error) {
+        // Silenciosamente ignora erros (placa não encontrada, etc)
+        console.log('Placa não encontrada ou erro ao buscar:', error);
+    }
+};
 
 const loadProcesses = async () => {
     await processStore.index(params.value);
@@ -230,6 +261,36 @@ const handleStatus = async () => {
         await statusStore.index({ without_pagination: 1 });
         const status = statusStore.getstatus;
         statusSelectData.value = prepareSelectDataStatus(status);
+        
+        // Preparar lista de títulos e mapeamento para autocomplete
+        // status pode ser um objeto Pagination com .data ou um array direto
+        let statusArray: any[] = [];
+        if (status) {
+            if (Array.isArray(status)) {
+                statusArray = status;
+            } else if (status.data && Array.isArray(status.data)) {
+                statusArray = status.data;
+            }
+        }
+        
+        if (statusArray.length > 0) {
+            statusTitlesList.value = statusArray.map((item: any) => item.title || '').filter((title: string) => title !== '');
+            statusTitleToIdMap.value = {};
+            statusArray.forEach((item: any) => {
+                if (item.title && item.id) {
+                    statusTitleToIdMap.value[item.title] = item.id;
+                }
+            });
+            console.log('Status titles loaded:', statusTitlesList.value.length, 'items');
+        } else {
+            statusTitlesList.value = [];
+            statusTitleToIdMap.value = {};
+            console.log('No status found. Status object:', status);
+        }
+    } else {
+        // Se não tem permissão, limpar as listas
+        statusTitlesList.value = [];
+        statusTitleToIdMap.value = {};
     }
 };
 
@@ -259,7 +320,10 @@ const prepareSelectData = (data: any) => {
 }
 
 const prepareSelectDataStatus = (data: any) => {
-    return data.map((item: any) => {
+    if (!data) return [];
+    // Se data é um objeto Pagination, usar data.data, senão usar data diretamente
+    const statusArray = Array.isArray(data) ? data : (data.data || []);
+    return statusArray.map((item: any) => {
         return {
             value: item.id,
             text: item.title
@@ -274,10 +338,16 @@ const actions: Action[] = [
         action: async (item) => {
             form.value = formData(getItemById(item.id));
             form.value.deadline_date = formatDateToISO(form.value.deadline_date);
-            form.value.status_id = getItemById(item.id).status[0].id;
+            const processItem = getItemById(item.id);
+            if (processItem.status && processItem.status[0]) {
+                form.value.status_id = processItem.status[0].id;
+                // Definir statusTitle para o autocomplete
+                statusTitle.value = processItem.status[0].title || '';
+            }
             console.log('form', form.value);
             
             await loadAgencies();
+            await handleStatus(); // Garantir que os status estão carregados
             handleProcessList();
             showModal.value = true;
         },
@@ -333,66 +403,150 @@ const actions: Action[] = [
 
 const showModal = ref(false);
 
+const handleAddClick = async () => {
+  form.value = formData();
+  statusTitle.value = '';
+  await loadAgencies();
+  await handleStatus(); // Garantir que os status estão carregados
+  showModal.value = true;
+};
+
 const handleCloseModal = () => {
   showModal.value = false;
   processFields.value = [];
   form.value = formData();
+  statusTitle.value = '';
 };
 
 const handleModalTitle = () => {
     return form.value.plate != '' ? 'Editar Processo' : 'Adicionar Processo';
 }
 
+const getStatusIdFromTitle = async (title: string): Promise<number | null> => {
+    if (!title || title.trim() === '') {
+        return null;
+    }
+    
+    // Verificar se já existe no mapeamento
+    if (statusTitleToIdMap.value[title]) {
+        return statusTitleToIdMap.value[title];
+    }
+    
+    // Se não existe e o usuário tem permissão, criar novo status
+    if (hasPermissionTo('Create status')) {
+        try {
+            const newStatus = await statusStore.store({
+                title: title,
+                color: '#007bff',
+                color_text: '#ffffff'
+            });
+            
+            // Atualizar lista e mapeamento
+            await handleStatus();
+            
+            // Retornar o ID do status recém-criado
+            if (newStatus && newStatus.data && newStatus.data.id) {
+                return newStatus.data.id;
+            }
+            
+            // Se não retornou, buscar no mapeamento atualizado
+            if (statusTitleToIdMap.value[title]) {
+                return statusTitleToIdMap.value[title];
+            }
+        } catch (error) {
+            console.error('Error creating new status:', error);
+        }
+    }
+    
+    return null;
+};
+
 const handleSubmit = async() => {
     isLoading.value = true;
     
-    // Prepare payload ensuring deadline_date is in the correct format
-    const { updateDeadLine, ...formDataWithoutUpdateDeadLine } = form.value;
-    const payload = {
-        ...formDataWithoutUpdateDeadLine,
-        // Ensure deadline_date is in ISO format (YYYY-MM-DD) if present
-        deadline_date: form.value.deadline_date ? formatDateToISO(form.value.deadline_date) : form.value.deadline_date,
-        params: params.value
-    };
-    
-    if(form.value.slug) {
-        await processStore.update(form.value.slug, payload);
-    }else{
-        await processStore.store(payload);
+    try {
+        // Converter statusTitle para status_id se necessário
+        let statusId = form.value.status_id;
+        // Se statusTitle está preenchido mas status_id não, converter título para ID
+        if (statusTitle.value && !statusId) {
+            statusId = await getStatusIdFromTitle(statusTitle.value);
+        }
+        // Se status_id está preenchido mas statusTitle não, buscar o título correspondente
+        else if (statusId && !statusTitle.value) {
+            const status = statusStore.getstatus.data?.find((s: any) => s.id === statusId);
+            if (status) {
+                statusTitle.value = status.title;
+            }
+        }
+        
+        // Prepare payload ensuring deadline_date is in the correct format
+        const { updateDeadLine, ...formDataWithoutUpdateDeadLine } = form.value;
+        const payload = {
+            ...formDataWithoutUpdateDeadLine,
+            status_id: statusId,
+            // Ensure deadline_date is in ISO format (YYYY-MM-DD) if present
+            deadline_date: form.value.deadline_date ? formatDateToISO(form.value.deadline_date) : form.value.deadline_date,
+            params: params.value
+        };
+        
+        if(form.value.slug) {
+            await processStore.update(form.value.slug, payload);
+        }else{
+            await processStore.store(payload);
+        }
+        
+        // Reload processes to get updated data from backend, including the updated deadline_date
+        await loadProcesses();
+        
+        isLoading.value = false;
+        showModal.value = false;
+        form.value = formData();
+        statusTitle.value = '';
+        processFields.value = [];
+    } catch (error) {
+        isLoading.value = false;
+        throw error;
     }
-    
-    // Reload processes to get updated data from backend, including the updated deadline_date
-    await loadProcesses();
-    
-    isLoading.value = false;
-    form.value = formData();
-    processFields.value = [];
 }
 
 const handleSubmitStatus = async() => {
     if(currentItem.value && currentItem.value.slug) {
         isLoading.value = true;
         
-        // Prepare payload ensuring deadline_date is in the correct format when updateDeadLine is true
-        const payload = {
-            ...form.value,
-            // Ensure deadline_date is in ISO format (YYYY-MM-DD) if updateDeadLine is true and deadline_date is present
-            deadline_date: (form.value.updateDeadLine && form.value.deadline_date) 
-                ? formatDateToISO(form.value.deadline_date) 
-                : form.value.deadline_date,
-            params: params.value
-        };
-        
-        await processStore.update(`update-status/${currentItem.value.slug}`, payload);
-        
-        // Reload processes to get updated data from backend, including the updated deadline_date
-        await loadProcesses();
-        
-        isLoading.value = false;
-        showUpdateStatusModal.value = false;
-        form.value.status_id = '';
-        form.value.updateDeadLine = false;
-        form.value.deadline_date = ''; // Reset deadline_date after submission
+        try {
+            // Converter statusTitle para status_id se necessário
+            let statusId = form.value.status_id;
+            if (statusTitle.value && !statusId) {
+                statusId = await getStatusIdFromTitle(statusTitle.value);
+            }
+            
+            // Prepare payload ensuring deadline_date is in the correct format when updateDeadLine is true
+            const payload = {
+                ...form.value,
+                status_id: statusId,
+                // Ensure deadline_date is in ISO format (YYYY-MM-DD) if updateDeadLine is true and deadline_date is present
+                deadline_date: (form.value.updateDeadLine && form.value.deadline_date) 
+                    ? formatDateToISO(form.value.deadline_date) 
+                    : form.value.deadline_date,
+                params: params.value
+            };
+            
+            await processStore.update(`update-status/${currentItem.value.slug}`, payload);
+            
+            // Reload processes to get updated data from backend, including the updated deadline_date
+            await loadProcesses();
+            
+            isLoading.value = false;
+            showUpdateStatusModal.value = false;
+            currentItem.value = null;
+            form.value.status_id = '';
+            statusTitle.value = '';
+            form.value.updateDeadLine = false;
+            form.value.deadline_date = ''; // Reset deadline_date after submission
+        } catch (error) {
+            isLoading.value = false;
+            throw error;
+        }
     }
 }
 
@@ -454,6 +608,7 @@ const handleUpdateStatusModal = () => {
     showUpdateStatusModal.value = false;
     currentItem.value = null;
     form.value.status_id = '';
+    statusTitle.value = '';
     form.value.updateDeadLine = false;
     form.value.deadline_date = ''; // Reset deadline_date when closing modal
 };
@@ -541,8 +696,9 @@ interface ProcessField {
 
 const processFields = ref<ProcessField[]>([]);
 
-const handleProcessList = () => {
+const handleProcessList = async () => {
     processFields.value = getProcessFieldsByServiceId();
+    await loadAgencies();
 }
 
 const allServices = ref<Service[]>([]);
@@ -592,6 +748,9 @@ const handleRowClick = (item: any) => {
 
         if (activeStatus) {
             form.value.status_id = activeStatus.id;
+            statusTitle.value = activeStatus.title || '';
+        } else {
+            statusTitle.value = '';
         }
         showUpdateStatusModal.value = true;
         
@@ -747,7 +906,12 @@ const formatDateToDisplay = (date: string) => {
             <div class="col-5">
                 <FormGroupComponent>
                     <LabelComponent text="Status" />
-                    <SelectComponent v-model="form.status_id" :options="statusSelectData" />
+                    <AutocompleteComponent 
+                        v-model="statusTitle"
+                        :suggestions="statusTitlesList"
+                        placeholder="Digite ou selecione um status"
+                    />
+                    <!-- Debug: {{ statusTitlesList.length }} status disponíveis -->
                 </FormGroupComponent>
             </div>
             <div class="col-5">
@@ -781,7 +945,18 @@ const formatDateToDisplay = (date: string) => {
         <template v-if="processFields.length > 0">
             <FormGroupComponent v-for="(field, index) in processFields" :key="index">
                 <LabelComponent :text="field.label" />
-                <InputComponent v-model="form[field.name]" :placeholder="field.label" :type="field.type" />
+                <AutocompleteComponent 
+                    v-if="field.name === 'agency'"
+                    v-model="form[field.name]"
+                    :suggestions="agenciesList"
+                    :placeholder="field.label"
+                />
+                <InputComponent 
+                    v-else
+                    v-model="form[field.name]" 
+                    :placeholder="field.label" 
+                    :type="field.type" 
+                />
             </FormGroupComponent>
         </template>
 
@@ -982,7 +1157,11 @@ const formatDateToDisplay = (date: string) => {
         <div>
             <FormGroupComponent>
                 <LabelComponent text="Status" />
-                <SelectComponent v-model="form.status_id" :options="statusSelectData" />
+                <AutocompleteComponent 
+                    v-model="statusTitle"
+                    :suggestions="statusTitlesList"
+                    placeholder="Digite ou selecione um status"
+                />
             </FormGroupComponent>
             <FormGroupComponent>
                 <div class="form-check form-switch">

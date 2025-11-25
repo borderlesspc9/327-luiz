@@ -19,21 +19,23 @@ export const useStatusStore = defineStore({
     actions: {
         async index(params: RequestParams) {
             const result = await index(endpoint.index, params);
-            this.status = result.data;
+            // result já é response.data, então pode ter result.data ou result diretamente
+            this.status = result.data || result;
         },
         async show(slug: string) {
             this.status = await show(endpoint.withSlug.replace('slug', slug));
         },
         async store(data: object) {
-            await store(endpoint.index, data);
+            const result = await store(endpoint.index, data);
             this.index({without_pagination: 0});
+            return result;
         },
         async update(slug: string, data: object) {
             await update(endpoint.withSlug.replace('slug', slug), data);
             this.index({without_pagination: 0});
         },
         async destroy(slug: string) {
-            await destroy(endpoint.withSlug.replace('slug', slug));
+            await destroy(endpoint.withSlug.replace('slug', slug), {});
             this.index({without_pagination: 0});
         },
     },

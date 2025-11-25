@@ -65,7 +65,8 @@ class ClientController extends Controller
     {
         try{
             $payload = $request->validated();
-            $payload['slug'] = Client::uniqueSlug($payload['name']);
+            $nameForSlug = $payload['name'] ?? 'cliente-' . uniqid();
+            $payload['slug'] = Client::uniqueSlug($nameForSlug);
 
             $client = $this->globalRepository->create($payload);
 

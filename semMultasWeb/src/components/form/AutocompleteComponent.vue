@@ -77,11 +77,9 @@ const handleBlur = () => {
     }, 200);
 };
 
-watch(() => props.modelValue, () => {
-    if (props.modelValue === '') {
-        showSuggestions.value = false;
-    }
-});
+watch(() => props.suggestions, () => {
+    // Quando as sugestões mudam, manter showSuggestions se já estiver aberto
+}, { deep: true });
 </script>
 
 <style scoped>

@@ -58,6 +58,7 @@ Route::middleware(JWTMiddleware::class)->group(function () {
     Route::prefix('processes')->group(function () {
         Route::get('/', [ProcessController::class, 'index'])->middleware([PermissionMiddleware::class.':Read process']);
         Route::get('/agencies/unique', [ProcessController::class, 'getUniqueAgencies'])->middleware([PermissionMiddleware::class.':Read process']);
+        Route::get('/by-plate', [ProcessController::class, 'getByPlate'])->middleware([PermissionMiddleware::class.':Read process']);
         Route::post('/', [ProcessController::class, 'store'])->middleware([PermissionMiddleware::class.':Create process']);        
         Route::get('/{process}', [ProcessController::class, 'show'])->middleware([PermissionMiddleware::class.':Read process']);
         Route::put('/{process}', [ProcessController::class, 'update'])->middleware([PermissionMiddleware::class.':Update process']);
