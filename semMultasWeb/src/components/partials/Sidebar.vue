@@ -1,7 +1,6 @@
 <script setup lang="ts">
 // @ts-ignore
-import { inject, computed } from 'vue';
-import { useRoute } from 'vue-router';
+import { inject } from 'vue';
 import IconChevronRight from '../icons/IconChevronRight.vue';
 import IconComponent from '../IconComponent.vue';
 import { useAcl } from '@/utils/acl';
@@ -9,13 +8,8 @@ import { useAcl } from '@/utils/acl';
 const logoSrc = new URL('@/assets/img/sem-multa.png', import.meta.url).href;
 
 const isOpen = inject('isOpen');
-const route = useRoute();
 
 const { hasPermissionTo } = useAcl();
-
-const isPreviewRoute = computed(() => {
-    return route.path.startsWith('/preview');
-});
 
 </script>
 
@@ -33,71 +27,7 @@ const isPreviewRoute = computed(() => {
             <span class="mob-visible">...</span>
         </h2>
 
-        <!-- Preview Routes -->
-        <template v-if="isPreviewRoute">
-            <router-link to="/preview" class="nav-link">
-                <IconComponent name="dashboard" />
-                <span class="title-link">Preview Home</span>
-            </router-link>
-
-            <div class="accordion accordion-flush accordion-sidebar" id="accordionSidebarProcessPreview">
-                <div class="accordion-item">
-                    <h2 class="accordion-header" id="flush-headingProcessPreview">
-                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                            data-bs-target="#flush-collapseProcessPreview" aria-expanded="false" aria-controls="flush-collapseProcessPreview">
-                            <IconComponent name="process" />
-                            <span class="title-link">Processos</span>
-                            <IconChevronRight class="arrow-chevron" />
-                        </button>
-                    </h2>
-                    <div id="flush-collapseProcessPreview" class="accordion-collapse collapse" aria-labelledby="flush-headingProcessPreview" data-bs-parent="#accordionSidebarProcessPreview">
-                        <div class="accordion-body">
-                            <div id="sub-menu-process-preview" aria-labelledby="flush-headingSubProcessPreview" data-bs-parent="#sub-nav-process-preview">
-                                <div class="accordion-body">
-                                    <ul class="sub-nav-dropdown">
-                                        <li>
-                                            <router-link to="/preview/process">Todos</router-link>
-                                        </li>
-                                        <li>
-                                            <router-link to="/preview/status">Status</router-link>
-                                        </li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <router-link to="/preview/clients" class="nav-link">
-                <IconComponent name="groups" />
-                <span class="title-link">Clientes</span>
-            </router-link>
-
-            <router-link to="/preview/services" class="nav-link">
-                <IconComponent name="service" />
-                <span class="title-link">Serviços</span>
-            </router-link>
-
-            <router-link to="/preview/roles" class="nav-link">
-                <IconComponent name="roles" />
-                <span class="title-link">Cargos</span>
-            </router-link>
-
-            <router-link to="/preview/users" class="nav-link">
-                <IconComponent name="users" />
-                <span class="title-link">Usuários</span>
-            </router-link>
-
-            <router-link to="/preview/search" class="nav-link">
-                <IconComponent name="search" />
-                <span class="title-link">Busca</span>
-            </router-link>
-        </template>
-
-        <!-- Normal Routes -->
-        <template v-else>
-            <div class="accordion accordion-flush accordion-sidebar" id="accordionSidebarProcess">
+        <div class="accordion accordion-flush accordion-sidebar" id="accordionSidebarProcess">
                 <div class="accordion-item">
                     <h2 class="accordion-header" id="flush-headingTwo">
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
@@ -146,7 +76,6 @@ const isPreviewRoute = computed(() => {
                 <IconComponent name="users" />
                 <span class="title-link">Usuários</span>
             </router-link>
-        </template>
 
         <!-- Logout -->
         <router-link to="/logout" class="nav-link logout">

@@ -11,58 +11,6 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
-      path: '/preview',
-      name: 'preview',
-      component: DashboardLayout,
-      children: [
-        {
-          path: '',
-          name: 'preview-page',
-          component: () => import('@/views/pages/preview/Preview.vue')
-        },
-        {
-          path: 'dashboard',
-          name: 'preview-dashboard',
-          component: () => import('@/views/pages/preview/DashboardPreview.vue')
-        },
-        {
-          path: 'process',
-          name: 'preview-process',
-          component: () => import('@/views/pages/preview/ProcessPreview.vue')
-        },
-        {
-          path: 'status',
-          name: 'preview-status',
-          component: () => import('@/views/pages/preview/StatusPreview.vue')
-        },
-        {
-          path: 'clients',
-          name: 'preview-clients',
-          component: () => import('@/views/pages/preview/ClientsPreview.vue')
-        },
-        {
-          path: 'services',
-          name: 'preview-services',
-          component: () => import('@/views/pages/preview/ServicePreview.vue')
-        },
-        {
-          path: 'roles',
-          name: 'preview-roles',
-          component: () => import('@/views/pages/preview/RolesPreview.vue')
-        },
-        {
-          path: 'users',
-          name: 'preview-users',
-          component: () => import('@/views/pages/preview/UsersPreview.vue')
-        },
-        {
-          path: 'search',
-          name: 'preview-search',
-          component: () => import('@/views/pages/preview/SearchPreview.vue')
-        }
-      ]
-    },
-    {
       path: '/login',
       name: 'login',
       component: () => import('@/views/pages/auth/Login.vue')
@@ -74,8 +22,7 @@ const router = createRouter({
     },
     {
       path: '/',
-      name: 'home',
-      component: DashboardLayout
+      redirect: '/painel'
     },
     {
       path: '/painel',
@@ -139,15 +86,25 @@ const router = createRouter({
 })
 
 router.beforeEach((to, from, next) => {
-  // Allow access to login, logout and all preview routes without authentication
-  const isPreviewRoute = to.path.startsWith('/preview') || 
-                         (to.name && to.name.toString().startsWith('preview'));
-  
-  if (to.name === 'login' || to.name === 'logout' || isPreviewRoute) {
-    return next();
+  const token = cache.getToken();
+
+  // If user is already logged in and tries to access login, redirect to dashboard
+  if (to.name === 'login' && token) {
+    try {
+      const decodedToken = jwtDecode(token);
+      const currentTime = Date.now() / 1000;
+      if (decodedToken.exp && decodedToken.exp >= currentTime) {
+        return next({ name: 'dashboard' });
+      }
+    } catch {
+      // Token is invalid, allow access to login
+    }
   }
 
-  const token = cache.getToken();
+  // Allow access to login and logout without authentication
+  if (to.name === 'login' || to.name === 'logout') {
+    return next();
+  }
 
   if (!token) {
     return next({ name: 'login' });

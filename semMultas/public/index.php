@@ -1,6 +1,21 @@
 <?php
 
+// Suppress deprecated warnings that break JSON responses
+error_reporting(E_ALL & ~E_DEPRECATED);
+
 use Illuminate\Http\Request;
+
+// Handle CORS at the earliest point possible
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS, PATCH');
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, Origin');
+header('Access-Control-Allow-Credentials: true');
+
+// Handle preflight OPTIONS request
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit();
+}
 
 define('LARAVEL_START', microtime(true));
 

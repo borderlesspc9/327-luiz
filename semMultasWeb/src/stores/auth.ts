@@ -25,6 +25,12 @@ export const useAuthStore = defineStore('auth',{
         async login(credentials: LoginCredentials) {
             try {
                 const response: LoginResponse = await AuthService.login(credentials);
+                
+                if (!response || !response.token) {
+                    toast.error('Resposta inválida do servidor');
+                    return false;
+                }
+                
                 cache.storeToken(response.token);
                 cache.storeItem('user', JSON.stringify(response.user));
                 this.token = response.token;
@@ -33,8 +39,11 @@ export const useAuthStore = defineStore('auth',{
 
                 return true;
                 
-            } catch (error) {
-                toast.error('Erro ao efetuar login!');
+            } catch (error: any) {
+                console.error('Login error:', error);
+                const message = error?.response?.data?.message || 'Erro ao efetuar login!';
+                toast.error(message);
+                return false;
             }
         },
 

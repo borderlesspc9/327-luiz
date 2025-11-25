@@ -72,16 +72,8 @@ const userData = ref({
     password: ''
 });
 
-const isPreviewRoute = computed(() => {
-    return route.path.startsWith('/preview');
-});
-
 const navigateToResult = () => {
-    if (isPreviewRoute.value) {
-        router.push({ path: '/preview/search', query: { q: searchQuery.value } });
-    } else {
-        router.push({ path: '/painel/search', query: { q: searchQuery.value } });
-    }
+    router.push({ path: '/painel/search', query: { q: searchQuery.value } });
 };
 </script>
 
