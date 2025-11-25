@@ -179,18 +179,6 @@ const actions: Action[] = [
         class: 'light red',
     },
     {
-        name: 'folder',
-        hasPermission: hasPermissionTo('Read client file'),
-        action: async (item) => {
-            currentItem.value = getItemById(item.id);
-            
-            await setFilesOnClient();
-            showModalFiles.value = true;
-        },
-        icon: 'folder',
-        class: 'light blue',
-    },
-    {
         name: 'pdf',
         hasPermission: hasPermissionTo('Create PDF Procuration'),
         action: async (item) => {

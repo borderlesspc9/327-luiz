@@ -29,6 +29,7 @@ import { useStatusStore } from '@/stores/status.store';
 import ConfirmDeleteModalComponent from '@/components/ConfirmDeleteModalComponent.vue';
 import ConfirmRefreshModal from '@/components/ConfirmRefreshModal.vue';
 import { useAcl } from '@/utils/acl';
+import BoxFileComponent from '@/components/BoxFileComponent.vue';
 import SwitchComponent from '@/components/form/SwitchComponent.vue';
 import TableComponentProcess from '@/components/TableComponentProcess.vue';
 import IconComponent from '@/components/IconComponent.vue';
@@ -399,9 +400,28 @@ const actions: Action[] = [
         icon: 'file-pdf',
         class: 'light blue',
     },
+    {
+        name: 'folder',
+        hasPermission: hasPermissionTo('Read client file'),
+        action: async (item) => {
+            const processItem = getItemById(item.id);
+            if (processItem && processItem.client && processItem.client.slug) {
+                currentClientItem.value = processItem.client;
+                await setFilesOnClient(processItem.client.slug);
+                showModalFiles.value = true;
+            }
+        },
+        icon: 'folder',
+        class: 'light blue',
+    },
 ]
 
 const showModal = ref(false);
+const showModalFiles = ref(false);
+const clientsFiles = ref<any[]>([]);
+const currentClientItem = ref<any>(null);
+const fileToDelete = ref<number | null>(null);
+const showDeleteModalFile = ref(false);
 
 const handleAddClick = async () => {
   form.value = formData();
@@ -421,6 +441,65 @@ const handleCloseModal = () => {
 const handleModalTitle = () => {
     return form.value.plate != '' ? 'Editar Processo' : 'Adicionar Processo';
 }
+
+const loadClientAndReturnFiles = async (slug: string) => {
+    await clientStore.show(slug);
+    const client: any = clientStore.getClient;
+    
+    // Verificar se client tem a estrutura esperada
+    // O client pode vir como { data: { files: [] } } ou diretamente { files: [] }
+    if (client) {
+        if (client.data && client.data.files) {
+            return client.data.files;
+        } else if (client.files) {
+            return client.files;
+        }
+    }
+    return [];
+};
+
+const setFilesOnClient = async (slug: string) => {
+    const filesUpdated = await loadClientAndReturnFiles(slug);
+    clientsFiles.value = filesUpdated;
+};
+
+const handleCloseModalFiles = () => {
+    showModalFiles.value = false;
+    currentClientItem.value = null;
+    clientsFiles.value = [];
+};
+
+const handleFileClick = (file: any) => {
+    const baseUrl = import.meta.env.VITE_API_URL_FILES;
+    const fileUrl = `${baseUrl}${file.url}`;
+
+    if (file.type === 'image' || file.type === 'pdf') {
+        // Abrir imagem ou PDF em uma nova aba
+        window.open(fileUrl, '_blank');
+    } else if (file.type === 'excel' || file.type === 'word') {
+        // Fazer download do arquivo Excel
+        const link = document.createElement('a');
+        link.href = fileUrl;
+        link.download = file.name;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+};
+
+const openDeleteModalFile = (file: any) => {
+    fileToDelete.value = file.id;
+    showDeleteModalFile.value = true;
+};
+
+const handleDeleteFile = async (fileId: number | null) => {
+    if (!fileId) return;
+    isLoading.value = true;
+    await clientStore.deleteFile(fileId);
+    clientsFiles.value = clientsFiles.value.filter((file: any) => file.id !== fileId);
+    showDeleteModalFile.value = false;
+    isLoading.value = false;
+};
 
 const getStatusIdFromTitle = async (title: string): Promise<number | null> => {
     if (!title || title.trim() === '') {
@@ -877,6 +956,29 @@ const formatDateToDisplay = (date: string) => {
         :show="showRefreshModal" 
         @closeModal="closeRefreshModal" 
         @confirmRefresh="confirmRefresh"
+    />
+
+    <ModalComponent
+        :show="showModalFiles" 
+        cancelText="Fechar"
+        actionText="Novo arquivo"
+        :title-header="'Arquivos de ' + (currentClientItem?.name || 'Cliente')" 
+        :showSubmitBtn="false"
+        @close-modal="handleCloseModalFiles"
+        :showCustomAction="false"
+    >
+        <BoxFileComponent 
+            :files="clientsFiles || []" 
+            @viewFile="handleFileClick"
+            @deleteFile="openDeleteModalFile"
+            :showBtnDeleteFile="hasPermissionTo('Delete File')"
+        />
+    </ModalComponent>
+
+    <ConfirmDeleteModalComponent 
+        :show="showDeleteModalFile" 
+        @closeModal="showDeleteModalFile = false"
+        @confirmDelete="handleDeleteFile(fileToDelete)"
     />
 
     <!-- modal de cadastro -->
