@@ -56,7 +56,14 @@ export const useProcessStore = defineStore({
             this.index({ without_pagination: 0 });
         },
         async update(slug: string, data: object) {
-            await update(endpoint.withSlug.replace('slug', slug), data);
+            if (!slug || slug.trim() === '') {
+                console.error('ProcessStore.update - slug is empty!');
+                throw new Error('Slug não pode estar vazio');
+            }
+            const url = endpoint.withSlug.replace('slug', slug);
+            console.log('ProcessStore.update - URL:', url);
+            console.log('ProcessStore.update - slug:', slug);
+            await update(url, data);
             this.index({ without_pagination: 0 });
         },
         async destroy(slug: string) {

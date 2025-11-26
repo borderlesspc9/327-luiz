@@ -49,7 +49,26 @@ const { hasPermissionTo } = useAcl();
 const isLoading = ref(false);
 
 const formData = (data: any = {}) => {
+    // Se payment_method é uma string, converter para array
+    let paymentMethods = [];
+    if (data.payment_method) {
+        if (typeof data.payment_method === 'string') {
+            // Se contém vírgula, separar; senão, usar como único item
+            paymentMethods = data.payment_method.includes(',') 
+                ? data.payment_method.split(',').map((m: string) => m.trim()).filter((m: string) => m)
+                : [data.payment_method];
+        } else if (Array.isArray(data.payment_method)) {
+            paymentMethods = data.payment_method;
+        }
+    }
+    
+    // Se não há formas de pagamento, adicionar uma vazia
+    if (paymentMethods.length === 0) {
+        paymentMethods = [''];
+    }
+    
     return {
+        id: data.id || null,
         user_id: data.user_id || '',
         client_id: data.client_id || null,
         status_id: data.status_id || null,
@@ -64,7 +83,7 @@ const formData = (data: any = {}) => {
         ait: data.ait || '',
         seller: data.seller || '',
         process_value: data.process_value || '',
-        payment_method: data.payment_method || '',
+        payment_methods: paymentMethods,
         observation: data.observation || '',
         process_number: data.process_number || '',
         deadline_date: data.deadline_date || '',
@@ -74,6 +93,9 @@ const formData = (data: any = {}) => {
 }
 
 const form = ref(formData());
+// Preservar slug e ID separadamente para evitar perda durante edição
+const currentProcessSlug = ref<string>('');
+const currentProcessId = ref<number | null>(null);
 
 const processes = ref<Pagination>({
     current_page: 0,
@@ -134,6 +156,13 @@ watch(() => form.value.plate, async (newPlate, oldPlate) => {
         if (!form.value.chassis && !form.value.renavam) {
             await fetchProcessByPlate(newPlate);
         }
+    }
+});
+
+// Watcher temporário para debug - verificar se updateDeadLine está sendo atualizado
+watch(() => form.value.updateDeadLine, (newValue, oldValue) => {
+    if (showUpdateStatusModal.value) {
+        console.log('updateDeadLine changed - newValue:', newValue, 'oldValue:', oldValue, 'type:', typeof newValue);
     }
 });
 
@@ -337,15 +366,55 @@ const actions: Action[] = [
         name: 'edit',
         hasPermission: hasPermissionTo('Update process'),
         action: async (item) => {
-            form.value = formData(getItemById(item.id));
+            // Recarregar os processos para garantir que temos os dados mais recentes
+            await loadProcesses();
+            
+            // Buscar o processo atualizado da lista recarregada
+            const updatedProcessItem = processes.value.data.find((p: any) => p.id === item.id) || getItemById(item.id);
+            
+            // Preservar slug e ID ANTES de qualquer outra operação (crítico!)
+            // Usar item.slug e item.id diretamente se disponível, senão buscar do processItem
+            const slugToPreserve = item.slug || updatedProcessItem?.slug || '';
+            const idToPreserve = item.id || updatedProcessItem?.id || null;
+            
+            // Preservar em variáveis separadas (não serão afetadas por mudanças no form)
+            currentProcessSlug.value = slugToPreserve;
+            currentProcessId.value = idToPreserve;
+            
+            form.value = formData(updatedProcessItem);
             form.value.deadline_date = formatDateToISO(form.value.deadline_date);
-            const processItem = getItemById(item.id);
-            if (processItem.status && processItem.status[0]) {
-                form.value.status_id = processItem.status[0].id;
-                // Definir statusTitle para o autocomplete
-                statusTitle.value = processItem.status[0].title || '';
+            
+            // Garantir que o slug e ID estão presentes no form também
+            if (slugToPreserve) {
+                form.value.slug = slugToPreserve;
             }
-            console.log('form', form.value);
+            if (idToPreserve) {
+                form.value.id = idToPreserve;
+            }
+            
+            // Buscar o status ativo (is_active = true) em vez de apenas o primeiro
+            const activeStatus = updatedProcessItem.status?.find((status: any) => status.pivot?.is_active === 1 || status.pivot?.is_active === true);
+            if (activeStatus) {
+                form.value.status_id = activeStatus.id;
+                // Definir statusTitle para o autocomplete
+                statusTitle.value = activeStatus.title || '';
+            } else {
+                // Se não houver status ativo, limpar os campos
+                form.value.status_id = null;
+                statusTitle.value = '';
+            }
+            
+            console.log('Edit - item:', item);
+            console.log('Edit - item.slug:', item.slug);
+            console.log('Edit - item.id:', item.id);
+            console.log('Edit - updatedProcessItem.slug:', updatedProcessItem?.slug);
+            console.log('Edit - updatedProcessItem.id:', updatedProcessItem?.id);
+            console.log('Edit - slugToPreserve:', slugToPreserve);
+            console.log('Edit - idToPreserve:', idToPreserve);
+            console.log('Edit - currentProcessSlug.value:', currentProcessSlug.value);
+            console.log('Edit - currentProcessId.value:', currentProcessId.value);
+            console.log('Edit - form.value.slug:', form.value.slug);
+            console.log('Edit - form.value.id:', form.value.id);
             
             await loadAgencies();
             await handleStatus(); // Garantir que os status estão carregados
@@ -422,9 +491,12 @@ const clientsFiles = ref<any[]>([]);
 const currentClientItem = ref<any>(null);
 const fileToDelete = ref<number | null>(null);
 const showDeleteModalFile = ref(false);
+const isSubmitting = ref(false); // Flag para evitar resetar valores durante submit
 
 const handleAddClick = async () => {
   form.value = formData();
+  currentProcessSlug.value = ''; // Limpar slug ao adicionar novo processo
+  currentProcessId.value = null; // Limpar ID ao adicionar novo processo
   statusTitle.value = '';
   await loadAgencies();
   await handleStatus(); // Garantir que os status estão carregados
@@ -432,14 +504,28 @@ const handleAddClick = async () => {
 };
 
 const handleCloseModal = () => {
+  console.log('handleCloseModal - called - isSubmitting:', isSubmitting.value);
+  console.log('handleCloseModal - called - currentProcessId.value:', currentProcessId.value);
+  console.log('handleCloseModal - called - currentProcessSlug.value:', currentProcessSlug.value);
+  
+  // Não resetar valores se ainda está fazendo submit (evita perder dados)
+  if (isSubmitting.value) {
+    console.log('handleCloseModal - Skipping reset because isSubmitting is true');
+    return;
+  }
+  
   showModal.value = false;
   processFields.value = [];
   form.value = formData();
+  currentProcessSlug.value = ''; // Limpar slug ao fechar modal
+  currentProcessId.value = null; // Limpar ID ao fechar modal
   statusTitle.value = '';
+  console.log('handleCloseModal - after reset - currentProcessId.value:', currentProcessId.value);
+  console.log('handleCloseModal - after reset - currentProcessSlug.value:', currentProcessSlug.value);
 };
 
 const handleModalTitle = () => {
-    return form.value.plate != '' ? 'Editar Processo' : 'Adicionar Processo';
+    return form.value.slug ? 'Editar Processo' : 'Adicionar Processo';
 }
 
 const loadClientAndReturnFiles = async (slug: string) => {
@@ -541,36 +627,116 @@ const getStatusIdFromTitle = async (title: string): Promise<number | null> => {
 };
 
 const handleSubmit = async() => {
+    // Marcar como submitting para evitar que handleCloseModal resete os valores
+    isSubmitting.value = true;
+    
+    // PRESERVAR valores NO INÍCIO, ANTES de qualquer outra operação
+    // Isso é CRÍTICO porque o ModalComponent pode fechar o modal e resetar os valores
+    // antes do handleSubmit terminar (já que é assíncrono)
+    console.log('handleSubmit - START - currentProcessId.value:', currentProcessId.value);
+    console.log('handleSubmit - START - currentProcessSlug.value:', currentProcessSlug.value);
+    console.log('handleSubmit - START - form.value.id:', form.value.id);
+    console.log('handleSubmit - START - form.value.slug:', form.value.slug);
+    
+    const preservedProcessId = currentProcessId.value || form.value.id;
+    const preservedProcessSlug = currentProcessSlug.value || form.value.slug;
+    
+    console.log('handleSubmit - preservedProcessId:', preservedProcessId);
+    console.log('handleSubmit - preservedProcessSlug:', preservedProcessSlug);
+    
     isLoading.value = true;
     
     try {
-        // Converter statusTitle para status_id se necessário
+        // Sempre converter statusTitle para status_id quando statusTitle está preenchido
+        // Isso garante que se o usuário mudou o título no autocomplete, o ID será atualizado
         let statusId = form.value.status_id;
-        // Se statusTitle está preenchido mas status_id não, converter título para ID
-        if (statusTitle.value && !statusId) {
-            statusId = await getStatusIdFromTitle(statusTitle.value);
-        }
-        // Se status_id está preenchido mas statusTitle não, buscar o título correspondente
-        else if (statusId && !statusTitle.value) {
-            const status = statusStore.getstatus.data?.find((s: any) => s.id === statusId);
-            if (status) {
-                statusTitle.value = status.title;
+        if (statusTitle.value) {
+            const idFromTitle = await getStatusIdFromTitle(statusTitle.value);
+            if (idFromTitle) {
+                statusId = idFromTitle;
             }
         }
         
+        // Determinar se é edição usando múltiplas estratégias:
+        // 1. preservedProcessId (preservado no início - mais confiável)
+        // 2. preservedProcessSlug (preservado no início)
+        // 3. Buscar pelo ID nos dados originais
+        
+        // Usar preservedProcessId como fonte primária (mais confiável que slug)
+        const processId = preservedProcessId;
+        let processSlug = preservedProcessSlug;
+        
+        // Se temos ID mas não temos slug, buscar nos dados originais
+        if (processId && !processSlug) {
+            const originalProcess = processes.value.data.find((p: any) => p.id === processId);
+            if (originalProcess && originalProcess.slug) {
+                processSlug = originalProcess.slug;
+                console.log('handleSubmit - Found slug from processes.data using ID:', processSlug);
+            }
+        }
+        
+        // Se temos um ID, é definitivamente uma edição
+        const isEdit = !!(processId || processSlug);
+        
+        console.log('handleSubmit - preservedProcessId:', preservedProcessId);
+        console.log('handleSubmit - preservedProcessSlug:', preservedProcessSlug);
+        console.log('handleSubmit - currentProcessId.value:', currentProcessId.value);
+        console.log('handleSubmit - currentProcessSlug.value:', currentProcessSlug.value);
+        console.log('handleSubmit - form.value.id:', form.value.id);
+        console.log('handleSubmit - form.value.slug:', form.value.slug);
+        console.log('handleSubmit - processId (final):', processId);
+        console.log('handleSubmit - processSlug (final):', processSlug);
+        console.log('handleSubmit - isEdit:', isEdit);
+        
         // Prepare payload ensuring deadline_date is in the correct format
-        const { updateDeadLine, ...formDataWithoutUpdateDeadLine } = form.value;
-        const payload = {
+        // Remover slug, id e updateDeadLine do payload (não devem ser enviados)
+        const { updateDeadLine, slug, id, payment_methods, ...formDataWithoutUpdateDeadLine } = form.value;
+        
+        // Converter array de formas de pagamento para string separada por vírgula
+        const paymentMethodString = payment_methods && Array.isArray(payment_methods)
+            ? payment_methods.filter((m: string) => m && m.trim()).join(', ')
+            : '';
+        
+        const payload: any = {
             ...formDataWithoutUpdateDeadLine,
-            status_id: statusId,
-            // Ensure deadline_date is in ISO format (YYYY-MM-DD) if present
+            payment_method: paymentMethodString,
             deadline_date: form.value.deadline_date ? formatDateToISO(form.value.deadline_date) : form.value.deadline_date,
             params: params.value
         };
         
-        if(form.value.slug) {
-            await processStore.update(form.value.slug, payload);
+        // Só incluir status_id no payload se ele foi explicitamente definido
+        // Se statusId for null ou undefined, não incluir no payload para não alterar o status atual
+        if (statusId !== null && statusId !== undefined) {
+            payload.status_id = statusId;
+        }
+        
+        console.log('handleSubmit - payload:', payload);
+        console.log('handleSubmit - will call:', isEdit ? 'UPDATE' : 'STORE');
+        
+        // Se é edição mas não temos slug, buscar pelo ID
+        if (isEdit && !processSlug && processId) {
+            // Buscar o processo completo para obter o slug
+            const fullProcess = processes.value.data.find((p: any) => p.id === processId);
+            if (fullProcess && fullProcess.slug) {
+                processSlug = fullProcess.slug;
+                console.log('handleSubmit - Retrieved slug from full process using ID:', processSlug);
+            }
+        }
+        
+        // Usar slug para determinar se é edição ou criação
+        // O slug não é enviado no payload, apenas usado para identificar a rota
+        if(isEdit && processSlug && processSlug.trim() !== '') {
+            console.log('handleSubmit - Calling UPDATE with slug:', processSlug);
+            console.log('handleSubmit - UPDATE payload:', payload);
+            try {
+                await processStore.update(processSlug, payload);
+            } catch (error) {
+                console.error('handleSubmit - Error on UPDATE:', error);
+                throw error;
+            }
         }else{
+            console.log('handleSubmit - Calling STORE (isEdit:', isEdit, ', processSlug:', processSlug, ')');
+            console.log('handleSubmit - STORE payload:', payload);
             await processStore.store(payload);
         }
         
@@ -578,54 +744,139 @@ const handleSubmit = async() => {
         await loadProcesses();
         
         isLoading.value = false;
+        isSubmitting.value = false; // Permitir que handleCloseModal funcione novamente
         showModal.value = false;
         form.value = formData();
+        currentProcessSlug.value = ''; // Limpar slug após salvar
+        currentProcessId.value = null; // Limpar ID após salvar
         statusTitle.value = '';
         processFields.value = [];
+        
+        // Se o modal de atualizar status estiver aberto, atualizar os dados também
+        if (showUpdateStatusModal.value && currentItem.value) {
+            const updatedProcess = processes.value.data.find((p: any) => p.id === currentItem.value?.id);
+            if (updatedProcess) {
+                const activeStatus = updatedProcess.status?.find((status: any) => status.pivot?.is_active === 1 || status.pivot?.is_active === true);
+                if (activeStatus) {
+                    form.value.status_id = activeStatus.id;
+                    statusTitle.value = activeStatus.title || '';
+                } else {
+                    form.value.status_id = null;
+                    statusTitle.value = '';
+                }
+                // Atualizar deadline_date também
+                form.value.deadline_date = updatedProcess.deadline_date ? formatDateToISO(updatedProcess.deadline_date) : '';
+                // Atualizar currentItem para refletir as mudanças
+                currentItem.value = updatedProcess;
+            }
+        }
     } catch (error) {
         isLoading.value = false;
+        isSubmitting.value = false; // Permitir que handleCloseModal funcione novamente mesmo em caso de erro
         throw error;
     }
 }
 
 const handleSubmitStatus = async() => {
-    if(currentItem.value && currentItem.value.slug) {
-        isLoading.value = true;
+    // Marcar como submitting para evitar que handleUpdateStatusModal resete os valores
+    isSubmittingStatus.value = true;
+    
+    // PRESERVAR slug ANTES de qualquer operação assíncrona
+    // Isso evita que seja perdido se o modal fechar antes do submit terminar
+    const preservedSlug = currentItem.value?.slug;
+    
+    if(!preservedSlug) {
+        console.error('handleSubmitStatus - No slug available');
+        isSubmittingStatus.value = false;
+        return;
+    }
+    
+    isLoading.value = true;
+    
+    try {
+        // PRESERVAR valores ANTES de qualquer operação assíncrona
+        // Isso é crítico porque o ModalComponent pode fechar o modal e resetar os valores
+        const preservedUpdateDeadLine = form.value.updateDeadLine === true || form.value.updateDeadLine === 'true' || form.value.updateDeadLine === 1 || form.value.updateDeadLine === '1';
+        const preservedDeadlineDate = form.value.deadline_date;
         
-        try {
-            // Converter statusTitle para status_id se necessário
-            let statusId = form.value.status_id;
-            if (statusTitle.value && !statusId) {
-                statusId = await getStatusIdFromTitle(statusTitle.value);
+        console.log('handleSubmitStatus - form.value.updateDeadLine (raw):', form.value.updateDeadLine);
+        console.log('handleSubmitStatus - form.value.updateDeadLine (type):', typeof form.value.updateDeadLine);
+        console.log('handleSubmitStatus - preservedUpdateDeadLine:', preservedUpdateDeadLine);
+        console.log('handleSubmitStatus - preservedDeadlineDate:', preservedDeadlineDate);
+        
+        // Sempre converter statusTitle para status_id quando statusTitle está preenchido
+        // Isso garante que se o usuário mudou o título no autocomplete, o ID será atualizado
+        let statusId = form.value.status_id;
+        if (statusTitle.value) {
+            const idFromTitle = await getStatusIdFromTitle(statusTitle.value);
+            if (idFromTitle) {
+                statusId = idFromTitle;
             }
-            
-            // Prepare payload ensuring deadline_date is in the correct format when updateDeadLine is true
-            const payload = {
-                ...form.value,
-                status_id: statusId,
-                // Ensure deadline_date is in ISO format (YYYY-MM-DD) if updateDeadLine is true and deadline_date is present
-                deadline_date: (form.value.updateDeadLine && form.value.deadline_date) 
-                    ? formatDateToISO(form.value.deadline_date) 
-                    : form.value.deadline_date,
-                params: params.value
-            };
-            
-            await processStore.update(`update-status/${currentItem.value.slug}`, payload);
-            
-            // Reload processes to get updated data from backend, including the updated deadline_date
-            await loadProcesses();
-            
-            isLoading.value = false;
-            showUpdateStatusModal.value = false;
-            currentItem.value = null;
-            form.value.status_id = '';
-            statusTitle.value = '';
-            form.value.updateDeadLine = false;
-            form.value.deadline_date = ''; // Reset deadline_date after submission
-        } catch (error) {
-            isLoading.value = false;
-            throw error;
         }
+        
+        // Verificar o valor de updateDeadLine antes de criar o payload
+        // Usar o valor preservado em vez do valor atual do form (que pode ter sido resetado)
+        const updateDeadLineValue = preservedUpdateDeadLine;
+        
+        console.log('handleSubmitStatus - updateDeadLineValue (final):', updateDeadLineValue);
+        console.log('handleSubmitStatus - form.value.deadline_date (current):', form.value.deadline_date);
+        
+        // Prepare payload ensuring deadline_date is in the correct format when updateDeadLine is true
+        const payload: any = {
+            status_id: statusId || null,
+            updateDeadLine: updateDeadLineValue,
+            params: params.value
+        };
+        
+        // Se updateDeadLine for true, sempre enviar deadline_date (mesmo que seja null, para permitir limpar a data)
+        // Usar o valor preservado em vez do valor atual do form
+        if (updateDeadLineValue) {
+            payload.deadline_date = preservedDeadlineDate 
+                ? formatDateToISO(preservedDeadlineDate) 
+                : null;
+            console.log('handleSubmitStatus - deadline_date will be sent:', payload.deadline_date);
+        } else {
+            console.log('handleSubmitStatus - updateDeadLine is false, deadline_date will NOT be sent');
+        }
+        
+        console.log('handleSubmitStatus - payload:', payload);
+        console.log('handleSubmitStatus - preservedSlug:', preservedSlug);
+        console.log('handleSubmitStatus - currentItem.value:', currentItem.value);
+        
+        await processStore.update(`update-status/${preservedSlug}`, payload);
+        
+        // Reload processes to get updated data from backend, including the updated deadline_date
+        await loadProcesses();
+        
+        isLoading.value = false;
+        isSubmittingStatus.value = false; // Permitir que handleUpdateStatusModal funcione novamente
+        showUpdateStatusModal.value = false;
+        currentItem.value = null;
+        form.value.status_id = '';
+        statusTitle.value = '';
+        form.value.updateDeadLine = false;
+        form.value.deadline_date = ''; // Reset deadline_date after submission
+        
+        // Se o modal de editar processo estiver aberto, atualizar os dados do form também
+        if (showModal.value && currentProcessId.value) {
+            const updatedProcess = processes.value.data.find((p: any) => p.id === currentProcessId.value);
+            if (updatedProcess) {
+                const activeStatus = updatedProcess.status?.find((status: any) => status.pivot?.is_active === 1 || status.pivot?.is_active === true);
+                if (activeStatus) {
+                    form.value.status_id = activeStatus.id;
+                    statusTitle.value = activeStatus.title || '';
+                } else {
+                    form.value.status_id = null;
+                    statusTitle.value = '';
+                }
+                // Atualizar deadline_date também
+                form.value.deadline_date = updatedProcess.deadline_date ? formatDateToISO(updatedProcess.deadline_date) : '';
+            }
+        }
+    } catch (error) {
+        isLoading.value = false;
+        isSubmittingStatus.value = false; // Permitir que handleUpdateStatusModal funcione novamente mesmo em caso de erro
+        throw error;
     }
 }
 
@@ -684,6 +935,12 @@ const handleCloseModaView = () => {
 };
 
 const handleUpdateStatusModal = () => {
+    // Não resetar valores se ainda está fazendo submit (evita perder dados)
+    if (isSubmittingStatus.value) {
+        console.log('handleUpdateStatusModal - Skipping reset because isSubmittingStatus is true');
+        return;
+    }
+    
     showUpdateStatusModal.value = false;
     currentItem.value = null;
     form.value.status_id = '';
@@ -776,17 +1033,40 @@ interface ProcessField {
 const processFields = ref<ProcessField[]>([]);
 
 const handleProcessList = async () => {
+    // Garantir que os serviços estão carregados antes de tentar acessar process_fields
+    if (allServices.value.length === 0) {
+        await handleServiceData();
+    }
     processFields.value = getProcessFieldsByServiceId();
     await loadAgencies();
 }
 
 const allServices = ref<Service[]>([]);
-const getProcessFieldsByServiceId = () => allServices.value.filter((service: Service) => service.id == form.value.service_id)[0].process_fields;
+const getProcessFieldsByServiceId = () => {
+    if (!form.value.service_id) {
+        return [];
+    }
+    const service = allServices.value.find((service: Service) => service.id == form.value.service_id);
+    if (!service || !service.process_fields) {
+        return [];
+    }
+    // Se process_fields é uma string JSON, fazer parse; se já é um array, retornar diretamente
+    if (typeof service.process_fields === 'string') {
+        try {
+            return JSON.parse(service.process_fields);
+        } catch (e) {
+            console.error('Error parsing process_fields:', e);
+            return [];
+        }
+    }
+    return service.process_fields || [];
+};
 
 const showDeleteModal = ref(false);
 const showRefreshModal = ref(false);
 const showViewModal = ref(false);
 const showUpdateStatusModal = ref(false);
+const isSubmittingStatus = ref(false); // Flag para evitar resetar valores durante submit
 
 const currentItem = ref<Process | null>(null);
 
@@ -816,19 +1096,28 @@ const confirmRefresh = () => {
     closeRefreshModal();
 };
 
-const handleRowClick = (item: any) => {
+const handleRowClick = async (item: any) => {
     //verificar se tem permissão Work process
     if(hasPermissionTo('Work process')){
-        const activeStatus = item.status?.find((status: any) => status.pivot?.is_active === 1);
-        currentItem.value = item;
+        // Recarregar os processos para garantir que temos os dados mais recentes
+        await loadProcesses();
+        
+        // Buscar o processo atualizado da lista recarregada
+        const updatedItem = processes.value.data.find((p: any) => p.id === item.id) || item;
+        
+        // Buscar o status ativo (is_active = true ou 1)
+        const activeStatus = updatedItem.status?.find((status: any) => status.pivot?.is_active === 1 || status.pivot?.is_active === true);
+        
+        currentItem.value = updatedItem;
         // Format deadline_date to ISO format for the date input
-        form.value.deadline_date = item.deadline_date ? formatDateToISO(item.deadline_date) : item.deadline_date;
+        form.value.deadline_date = updatedItem.deadline_date ? formatDateToISO(updatedItem.deadline_date) : updatedItem.deadline_date;
         form.value.updateDeadLine = false; // Reset updateDeadLine flag
 
         if (activeStatus) {
             form.value.status_id = activeStatus.id;
             statusTitle.value = activeStatus.title || '';
         } else {
+            form.value.status_id = null;
             statusTitle.value = '';
         }
         showUpdateStatusModal.value = true;
@@ -861,7 +1150,46 @@ const paymentMethod = [
     { value: 'Transferência', text: 'Transferência' },
     // { value: 'Cheque', text: 'Cheque' },
     // { value: 'Outro', text: 'Outro' },
-]
+];
+
+// Funções para gerenciar múltiplas formas de pagamento
+const addPaymentMethod = () => {
+    if (!form.value.payment_methods) {
+        form.value.payment_methods = [''];
+    }
+    form.value.payment_methods.push('');
+};
+
+const removePaymentMethod = (index: number) => {
+    // Não permitir remover o primeiro método de pagamento
+    if (index > 0 && form.value.payment_methods && form.value.payment_methods.length > 1) {
+        form.value.payment_methods.splice(index, 1);
+    }
+};
+
+// Retornar apenas os métodos de pagamento disponíveis (não selecionados em outros campos)
+const getAvailablePaymentMethods = (currentIndex: number) => {
+    if (!form.value.payment_methods) {
+        return paymentMethod;
+    }
+    
+    // Obter todos os métodos já selecionados em outros campos (exceto o do índice atual)
+    const selectedMethods = form.value.payment_methods
+        .map((method: string, index: number) => index !== currentIndex && method ? method.trim() : null)
+        .filter((method: string | null) => method && method !== '');
+    
+    // Retornar apenas os métodos que não foram selecionados em outros campos
+    // Se o campo atual já tem um valor selecionado, ele também deve aparecer na lista
+    return paymentMethod.filter((option: any) => {
+        // Sempre incluir o método atualmente selecionado neste campo
+        const currentValue = form.value.payment_methods[currentIndex];
+        if (currentValue && option.value === currentValue.trim()) {
+            return true;
+        }
+        // Para outros métodos, verificar se não estão selecionados em outros campos
+        return !selectedMethods.includes(option.value);
+    });
+};
 
 const moneyConfig = {
     masked: false,
@@ -1012,6 +1340,7 @@ const formatDateToDisplay = (date: string) => {
                         v-model="statusTitle"
                         :suggestions="statusTitlesList"
                         placeholder="Digite ou selecione um status"
+                        :showAllSuggestions="true"
                     />
                     <!-- Debug: {{ statusTitlesList.length }} status disponíveis -->
                 </FormGroupComponent>
@@ -1034,7 +1363,36 @@ const formatDateToDisplay = (date: string) => {
             <div class="col-6">
                 <FormGroupComponent>
                     <LabelComponent text="Forma de pagamento" />
-                    <SelectComponent v-model="form.payment_method" :options="paymentMethod" />
+                    <div v-for="(method, index) in form.payment_methods" :key="index" class="mb-2">
+                        <div class="d-flex gap-2 align-items-center">
+                            <div class="flex-grow-1">
+                                <SelectComponent 
+                                    v-model="form.payment_methods[index]" 
+                                    :options="getAvailablePaymentMethods(index)"
+                                    :placeholder="`Forma de pagamento ${index + 1}`"
+                                />
+                            </div>
+                            <button 
+                                v-if="index > 0"
+                                type="button" 
+                                class="btn btn-sm btn-outline-danger"
+                                @click="removePaymentMethod(index)"
+                                style="height: 38px; width: 38px; padding: 0; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.2rem; line-height: 1;"
+                                title="Remover forma de pagamento"
+                            >
+                                ×
+                            </button>
+                        </div>
+                    </div>
+                    <button 
+                        type="button" 
+                        class="btn btn-sm btn-outline-primary mt-2"
+                        @click="addPaymentMethod"
+                        style="padding: 0.375rem 0.75rem; font-size: 0.875rem;"
+                    >
+                        <i class="bi bi-plus-circle me-1"></i>
+                        Adicionar forma de pagamento
+                    </button>
                 </FormGroupComponent>
             </div>
         </div>        
@@ -1263,6 +1621,7 @@ const formatDateToDisplay = (date: string) => {
                     v-model="statusTitle"
                     :suggestions="statusTitlesList"
                     placeholder="Digite ou selecione um status"
+                    :showAllSuggestions="true"
                 />
             </FormGroupComponent>
             <FormGroupComponent>

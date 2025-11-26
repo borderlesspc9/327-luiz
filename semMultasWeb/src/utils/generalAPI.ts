@@ -37,8 +37,23 @@ export const update = async (url: string, data: object) => {
     try {
         const response = await axiosInstance.put(url, data);
         toast.success(response.data.message);
+        return response.data;
     } catch (error: any) {
-        toast.error(error.response.data.message);
+        // Tratar erros de rede (status code 0) ou outros erros
+        if (error.response) {
+            // Erro do servidor (4xx, 5xx)
+            const errorMessage = error.response.data?.message 
+                || error.response.data?.error 
+                || `Erro ${error.response.status}: ${error.response.statusText}`;
+            toast.error(errorMessage);
+        } else if (error.request) {
+            // Requisição foi feita mas não houve resposta (erro de rede)
+            toast.error('Erro de conexão. Verifique sua internet e tente novamente.');
+        } else {
+            // Erro ao configurar a requisição
+            toast.error(error.message || 'Erro ao atualizar');
+        }
+        throw error;
     }
 }
 

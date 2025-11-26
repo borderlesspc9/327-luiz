@@ -12,6 +12,7 @@ use App\Exceptions\CustomException;
 use App\Http\Requests\ProcessRequest;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use App\Service\PdfService;
 use GuzzleHttp\Client as GuzzleClient;
 
@@ -137,35 +138,83 @@ class ProcessController extends Controller
     public function updateStatus(Request $request, Process $process)
     {
         try {
-            if ($request['status_id']) {
+            // Remover params do payload se existir (não deve ser salvo no banco)
+            $payload = $request->all();
+            unset($payload['params']);
+            
+            if (isset($payload['status_id']) && !empty($payload['status_id'])) {
+                $newStatusId = (int) $payload['status_id'];
                 $currentStatus = $process->status()->wherePivot('is_active', true)->first();
+                
+                $shouldUpdate = false;
+                if (!$currentStatus) {
+                    $shouldUpdate = true;
+                } else if ((int) $currentStatus->id !== $newStatusId) {
+                    $shouldUpdate = true;
+                }
     
-                if (!$currentStatus || $currentStatus->pivot->status_id != $request['status_id']) {
+                if ($shouldUpdate) {
+                    // Desativar todos os status ativos atuais
                     if ($currentStatus) {
-                        $process->status()->updateExistingPivot($currentStatus->pivot->status_id, ['is_active' => false]);
+                        $process->status()->updateExistingPivot($currentStatus->id, ['is_active' => false]);
                     }
     
-                    $process->status()->attach($request['status_id'], [
-                        'user_id' => Auth::user()->id,
-                        'created_at' => Carbon::now(),
-                        'updated_at' => Carbon::now()
-                    ]);
-                        
-                    // if(!$request->updateDeadLine){
-                    //     $this->refresh($request, $process);
-                    // }else{
-                    // }
-                    if($request->updateDeadLine == true && !empty($request->deadline_date)){
-                        $process->deadline_date = $request->deadline_date;
-                        $process->update();
-
-                        //chamar função para atualizar o front em tempo real
-                        // $this->UpdateProcessInRealTime($request['params'], $process);
+                    // Verificar se o novo status já existe na tabela pivot
+                    // Verificar diretamente na tabela pivot se já existe um registro
+                    $existingPivot = DB::table('process_status_pivot')
+                        ->where('process_id', $process->id)
+                        ->where('status_id', $newStatusId)
+                        ->first();
+                    
+                    if ($existingPivot) {
+                        // Se já existe, apenas atualizar para is_active = true
+                        DB::table('process_status_pivot')
+                            ->where('process_id', $process->id)
+                            ->where('status_id', $newStatusId)
+                            ->update([
+                                'is_active' => true,
+                                'user_id' => Auth::user()->id,
+                                'updated_at' => Carbon::now()
+                            ]);
+                    } else {
+                        // Se não existe, criar novo registro
+                        $process->status()->attach($newStatusId, [
+                            'is_active' => true,
+                            'user_id' => Auth::user()->id,
+                            'created_at' => Carbon::now(),
+                            'updated_at' => Carbon::now()
+                        ]);
                     }
                 }
-                return $this->defaultResponse->successWithContent('Status do processo atualizado com sucesso!', 201, $process);
             }
+            
+            // Atualizar deadline_date se updateDeadLine for true
+            // Verificar se updateDeadLine foi enviado e é verdadeiro (pode vir como boolean, string "true", "1", etc.)
+            $updateDeadLine = $request->input('updateDeadLine');
+            $shouldUpdateDeadline = $updateDeadLine === true 
+                || $updateDeadLine === 'true' 
+                || $updateDeadLine === '1' 
+                || $updateDeadLine === 1;
+            
+            if ($shouldUpdateDeadline) {
+                // Se updateDeadLine é true, atualizar deadline_date (mesmo que seja null para limpar)
+                $deadlineDate = $request->input('deadline_date');
+                // Tratar strings vazias como null
+                if ($deadlineDate === '' || $deadlineDate === null) {
+                    $process->deadline_date = null;
+                } else {
+                    $process->deadline_date = $deadlineDate;
+                }
+                $process->save();
+            }
+            
+            // Recarregar o processo com o status atualizado
+            $process->load('status');
+            
+            return $this->defaultResponse->successWithContent('Status do processo atualizado com sucesso!', 200, $process);
         } catch (\Exception $e) {
+            \Log::error('Error in updateStatus: ' . $e->getMessage());
+            \Log::error('Stack trace: ' . $e->getTraceAsString());
             throw new CustomException($e->getMessage());
         }
     }
@@ -199,27 +248,71 @@ class ProcessController extends Controller
     {
         try {
             $payload = $request->validated();
+            
+            // Remover params do payload se existir (não deve ser salvo no banco)
+            unset($payload['params']);
     
             $process = $this->globalRepository->update($payload, $process->id);
     
-            if (isset($payload['status_id'])) {
+            // Só atualizar status se status_id foi explicitamente enviado e não é null
+            // Se status_id não foi enviado no request, não fazer nada (manter status atual)
+            if ($request->has('status_id') && $request->input('status_id') !== null && $request->input('status_id') !== '') {
+                $newStatusId = (int) $request->input('status_id');
                 $currentStatus = $process->status()->wherePivot('is_active', true)->first();
     
-                if (!$currentStatus || $currentStatus->pivot->status_id != $payload['status_id']) {
+                $shouldUpdate = false;
+                if (!$currentStatus) {
+                    $shouldUpdate = true;
+                } else if ((int) $currentStatus->id !== $newStatusId) {
+                    $shouldUpdate = true;
+                }
+    
+                if ($shouldUpdate) {
+                    // Desativar todos os status ativos atuais
                     if ($currentStatus) {
-                        $process->status()->updateExistingPivot($currentStatus->pivot->status_id, ['is_active' => false]);
+                        $process->status()->updateExistingPivot($currentStatus->id, ['is_active' => false]);
                     }
     
-                    $process->status()->attach($request['status_id'], ['user_id' => Auth::user()->id]);
+                    // Verificar se o novo status já existe na tabela pivot
+                    // Verificar diretamente na tabela pivot se já existe um registro
+                    $existingPivot = DB::table('process_status_pivot')
+                        ->where('process_id', $process->id)
+                        ->where('status_id', $newStatusId)
+                        ->first();
+                    
+                    if ($existingPivot) {
+                        // Se já existe, apenas atualizar para is_active = true
+                        DB::table('process_status_pivot')
+                            ->where('process_id', $process->id)
+                            ->where('status_id', $newStatusId)
+                            ->update([
+                                'is_active' => true,
+                                'user_id' => Auth::user()->id,
+                                'updated_at' => Carbon::now()
+                            ]);
+                    } else {
+                        // Se não existe, criar novo registro
+                        $process->status()->attach($newStatusId, [
+                            'is_active' => true,
+                            'user_id' => Auth::user()->id,
+                            'created_at' => Carbon::now(),
+                            'updated_at' => Carbon::now()
+                        ]);
+                    }
                 }
             }
 
             //chamar função para atualizar o front em tempo real
             // $this->UpdateProcessInRealTime($payload['params'], $process);
+            
+            // Recarregar o processo com o status atualizado
+            $process->load('status');
     
             return $this->defaultResponse->successWithContent('Processo atualizado com sucesso!', 200, $process);
     
         } catch (\Exception $e) {
+            \Log::error('Error in update: ' . $e->getMessage());
+            \Log::error('Stack trace: ' . $e->getTraceAsString());
             throw new CustomException($e->getMessage());
         }
     }

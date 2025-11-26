@@ -84,9 +84,24 @@ class GlobalRepository implements GlobalRepositoryInterface
     {
         $whithoutPagination = $searchParams['without_pagination'] ?? false;
         
+        // Garantir que todas as chaves estrangeiras estão incluídas quando seus relacionamentos são carregados
+        // Isso é necessário para que o Eloquent carregue corretamente os relacionamentos
+        $columnsToSelect = $columns;
+        if ($columns !== ['*']) {
+            // Garantir que todas as chaves estrangeiras necessárias estão incluídas
+            $foreignKeys = ['client_id', 'service_id', 'seller_id', 'user_id'];
+            foreach ($foreignKeys as $foreignKey) {
+                // Verificar se o relacionamento correspondente está sendo carregado
+                $relationName = str_replace('_id', '', $foreignKey);
+                if (in_array($relationName, $relationships) && !in_array($foreignKey, $columnsToSelect)) {
+                    $columnsToSelect[] = $foreignKey;
+                }
+            }
+        }
+        
         $data = $this->model->query()
             ->with($relationships)
-            ->select($columns)
+            ->select($columnsToSelect)
             ->when($searchParams['search'] ?? null, function ($query, $search) {
                 $model = $query->getModel();
                 $columns = Schema::getColumnListing($model->getTable());

@@ -42,6 +42,10 @@ const props = defineProps({
         type: Array as () => string[],
         default: () => [],
     },
+    showAllSuggestions: {
+        type: Boolean,
+        default: false,
+    },
 });
 
 const emit = defineEmits(['update:modelValue', 'update:error']);
@@ -50,6 +54,11 @@ const showSuggestions = ref(false);
 const highlightedIndex = ref(-1);
 
 const filteredSuggestions = computed(() => {
+    // Se showAllSuggestions for true, sempre retorna todas as sugestões
+    if (props.showAllSuggestions) {
+        return props.suggestions;
+    }
+    // Caso contrário, filtra normalmente
     if (!props.modelValue || props.modelValue.trim() === '') {
         return props.suggestions;
     }
