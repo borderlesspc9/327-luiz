@@ -8,6 +8,7 @@
     "build": "run-p \"build-only {@}\" --",
     "preview": "vite preview",
     "build-only": "vite build",
+    "start": "vite preview --host 0.0.0.0 --port $PORT",
     "clean": "rmdir /s /q node_modules && npm cache clean --force"
   },
   "dependencies": {
