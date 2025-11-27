@@ -145,7 +145,7 @@ class ProcessController extends Controller
             if (isset($payload['status_id']) && !empty($payload['status_id'])) {
                 $newStatusId = (int) $payload['status_id'];
                 $currentStatus = $process->status()->wherePivot('is_active', true)->first();
-                
+    
                 $shouldUpdate = false;
                 if (!$currentStatus) {
                     $shouldUpdate = true;
@@ -180,10 +180,10 @@ class ProcessController extends Controller
                         // Se não existe, criar novo registro
                         $process->status()->attach($newStatusId, [
                             'is_active' => true,
-                            'user_id' => Auth::user()->id,
-                            'created_at' => Carbon::now(),
-                            'updated_at' => Carbon::now()
-                        ]);
+                        'user_id' => Auth::user()->id,
+                        'created_at' => Carbon::now(),
+                        'updated_at' => Carbon::now()
+                    ]);
                     }
                 }
             }

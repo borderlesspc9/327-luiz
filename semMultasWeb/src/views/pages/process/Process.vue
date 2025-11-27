@@ -212,6 +212,7 @@ interface ProcessData {
     AIT: string;
     'Data limite': string;
     Serviço: string;
+    Status: string;
     Placa: string;
     Chassi: string;
     Renavam: string;
@@ -224,12 +225,17 @@ interface ProcessData {
 const processesData = ref<ProcessData[]>([]);
 const prepareDataToTable = () => {
     processesData.value = processes.value.data.map((process): ProcessData => {
+        // Get active status
+        const activeStatus = process.status?.find((status: any) => status.pivot?.is_active === 1 || status.pivot?.is_active === true);
+        const statusTitle = activeStatus ? activeStatus.title : 'Status não disponível';
+        
         return {
             id: process.id,
             slug: process.slug,
             AIT: process.ait,
             'Data limite': formatDateToDisplay(process.deadline_date), // Format to DD/MM/YYYY
             Serviço: process.service?.name,
+            Status: statusTitle,
             Placa: process.plate,
             Chassi: process.chassis,
             Renavam: process.renavam,
@@ -620,7 +626,7 @@ const getStatusIdFromTitle = async (title: string): Promise<number | null> => {
             }
         } catch (error) {
             console.error('Error creating new status:', error);
-        }
+}
     }
     
     return null;
@@ -687,8 +693,8 @@ const handleSubmit = async() => {
         console.log('handleSubmit - processId (final):', processId);
         console.log('handleSubmit - processSlug (final):', processSlug);
         console.log('handleSubmit - isEdit:', isEdit);
-        
-        // Prepare payload ensuring deadline_date is in the correct format
+    
+    // Prepare payload ensuring deadline_date is in the correct format
         // Remover slug, id e updateDeadLine do payload (não devem ser enviados)
         const { updateDeadLine, slug, id, payment_methods, ...formDataWithoutUpdateDeadLine } = form.value;
         
@@ -698,12 +704,12 @@ const handleSubmit = async() => {
             : '';
         
         const payload: any = {
-            ...formDataWithoutUpdateDeadLine,
+        ...formDataWithoutUpdateDeadLine,
             payment_method: paymentMethodString,
-            deadline_date: form.value.deadline_date ? formatDateToISO(form.value.deadline_date) : form.value.deadline_date,
-            params: params.value
-        };
-        
+        deadline_date: form.value.deadline_date ? formatDateToISO(form.value.deadline_date) : form.value.deadline_date,
+        params: params.value
+    };
+    
         // Só incluir status_id no payload se ele foi explicitamente definido
         // Se statusId for null ou undefined, não incluir no payload para não alterar o status atual
         if (statusId !== null && statusId !== undefined) {
@@ -734,23 +740,23 @@ const handleSubmit = async() => {
                 console.error('handleSubmit - Error on UPDATE:', error);
                 throw error;
             }
-        }else{
+    }else{
             console.log('handleSubmit - Calling STORE (isEdit:', isEdit, ', processSlug:', processSlug, ')');
             console.log('handleSubmit - STORE payload:', payload);
-            await processStore.store(payload);
-        }
-        
-        // Reload processes to get updated data from backend, including the updated deadline_date
-        await loadProcesses();
-        
-        isLoading.value = false;
+        await processStore.store(payload);
+    }
+    
+    // Reload processes to get updated data from backend, including the updated deadline_date
+    await loadProcesses();
+    
+    isLoading.value = false;
         isSubmitting.value = false; // Permitir que handleCloseModal funcione novamente
         showModal.value = false;
-        form.value = formData();
+    form.value = formData();
         currentProcessSlug.value = ''; // Limpar slug após salvar
         currentProcessId.value = null; // Limpar ID após salvar
         statusTitle.value = '';
-        processFields.value = [];
+    processFields.value = [];
         
         // Se o modal de atualizar status estiver aberto, atualizar os dados também
         if (showUpdateStatusModal.value && currentItem.value) {
@@ -791,7 +797,7 @@ const handleSubmitStatus = async() => {
         return;
     }
     
-    isLoading.value = true;
+        isLoading.value = true;
     
     try {
         // PRESERVAR valores ANTES de qualquer operação assíncrona
@@ -1015,13 +1021,20 @@ const submitImportFile = async () => {
 
   isLoading.value = true;
 
+  try {
   const formData = new FormData();
   formData.append('file', importFile.value);
   
   await importStore.fetchImport(formData);
   resetFileInput();
+    showModalImportFile.value = false;
   await loadProcesses();
+  } catch (error) {
+    console.error('Erro ao importar arquivo:', error);
+    // O erro já foi tratado e exibido no toast pela função importData
+  } finally {
   isLoading.value = false;
+  }
 };
 
 interface ProcessField {

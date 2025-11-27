@@ -18,7 +18,9 @@ class ExportController extends Controller
         try{
             $searchParams = $request->all();
 
-            $client = Client::with(['processes', 'processes.service'])
+            $client = Client::with(['processes', 'processes.service', 'processes.status' => function($query) {
+                $query->withPivot('is_active');
+            }])
                 ->where(function ($query) use ($searchParams) {
                     if (isset($searchParams['name'])) {
                         $query->where('name', 'like', '%' . $searchParams['name'] . '%');

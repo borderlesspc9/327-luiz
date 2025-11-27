@@ -5,10 +5,12 @@ namespace App\Imports;
 use App\Models\Client;
 use App\Models\Process;
 use App\Models\Service;
+use App\Models\Status;
 use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use App\Exceptions\customException;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
 
 class ProcessImport implements ToModel, WithHeadingRow
 {
@@ -45,18 +47,27 @@ class ProcessImport implements ToModel, WithHeadingRow
     private function processColumns($row)
     {
         $deadlineDate = $row['data_limite'] ?? null;
+        $date = null;
 
         if ($deadlineDate) {
             try {
                 // Verifica se a data está no formato YYYY-MM-DD
-                $date = Carbon::createFromFormat('Y-m-d', $deadlineDate);
+                $carbonDate = Carbon::createFromFormat('Y-m-d', $deadlineDate);
+                $date = $carbonDate->format('Y-m-d');
             } catch (\Exception $e) {
                 try {
                     // Tenta converter a data do formato d/m/Y para YYYY-MM-DD
-                    $date = Carbon::createFromFormat('d/m/Y', $deadlineDate)->format('Y-m-d');
+                    $carbonDate = Carbon::createFromFormat('d/m/Y', $deadlineDate);
+                    $date = $carbonDate->format('Y-m-d');
                 } catch (\Exception $e) {
-                    // Lança uma exceção se a data não estiver em nenhum dos formatos esperados
-                    throw new customException("Invalid date format for deadline_date: " . $deadlineDate, 400);
+                    try {
+                        // Tenta converter a data do formato Y-m-d H:i:s (formato datetime do Excel)
+                        $carbonDate = Carbon::createFromFormat('Y-m-d H:i:s', $deadlineDate);
+                        $date = $carbonDate->format('Y-m-d');
+                    } catch (\Exception $e) {
+                        // Lança uma exceção se a data não estiver em nenhum dos formatos esperados
+                        throw new customException("Invalid date format for deadline_date: " . $deadlineDate, 400);
+                    }
                 }
             }
         }
@@ -73,7 +84,7 @@ class ProcessImport implements ToModel, WithHeadingRow
             'payment_method' => $row['forma_de_pagamento'] ?? null,
             'observation' => $row['observacao'] ?? null,
             'process_number' => $row['numero_do_processo'] ?? null,
-            'deadline_date' => $date ?? null,
+            'deadline_date' => $date,
             'seller' => $row['vendedor'] ?? null,
             'slug' => Process::uniqueSlug('process-' . $row['nome_do_cliente']),
         ];
@@ -90,20 +101,62 @@ class ProcessImport implements ToModel, WithHeadingRow
             return null;
         }
         $clientPayload = $this->clientColumns($row);
-        // $servicePayload = $this->serviceColumns($row);
+        $servicePayload = $this->serviceColumns($row);
         $processPayload = $this->processColumns($row);
+        $statusTitle = $row['status'] ?? null;
         
         try {
-            $client = Client::create($clientPayload);
-            // $service = Service::create($servicePayload);
-            $process = Process::create(array_merge( $processPayload, [
+            // Busca ou cria o cliente baseado no CPF
+            // Se o cliente já existir, atualiza os dados; se não, cria um novo
+            $client = Client::updateOrCreate(
+                ['cpf' => $clientPayload['cpf']],
+                $clientPayload
+            );
+            
+            // Busca ou cria o serviço baseado no nome
+            $service = null;
+            if (!empty($servicePayload['name'])) {
+                $service = Service::firstOrCreate(
+                    ['name' => $servicePayload['name']],
+                    $servicePayload
+                );
+            }
+            
+            // Cria o processo
+            $processData = [
                 'client_id' => $client->id,
-                // 'service_id' => $service->id,
-            ]));
+            ];
+            
+            if ($service) {
+                $processData['service_id'] = $service->id;
+            }
+            
+            $process = Process::create(array_merge($processPayload, $processData));
+            
+            // Busca e vincula o status se fornecido
+            if (!empty($statusTitle)) {
+                $status = Status::where('title', $statusTitle)->first();
+                if ($status) {
+                    // Desativa todos os status anteriores do processo
+                    $existingStatuses = $process->status()->wherePivot('is_active', true)->get();
+                    foreach ($existingStatuses as $existingStatus) {
+                        $process->status()->updateExistingPivot($existingStatus->id, ['is_active' => false]);
+                    }
+                    
+                    // Vincula o novo status como ativo
+                    $userId = Auth::check() ? Auth::user()->id : 1; // Fallback para user_id 1 se não houver autenticação
+                    $process->status()->attach($status->id, [
+                        'user_id' => $userId,
+                        'is_active' => true,
+                        'created_at' => Carbon::now(),
+                        'updated_at' => Carbon::now()
+                    ]);
+                }
+            }
 
             return [
                 'client' => $client,
-                // 'service' => $service,
+                'service' => $service,
                 'process' => $process,
             ];
 

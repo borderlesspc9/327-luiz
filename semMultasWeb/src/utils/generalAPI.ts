@@ -103,7 +103,12 @@ export const importData = async (url: string, data: FormData) => {
         toast.success(response.data.message);
         return response.data;
     } catch (error: any) {
-        toast.error(error.response.data.message);
+        const errorMessage = error.response?.data?.message 
+            || error.response?.data?.error 
+            || error.message 
+            || 'Erro ao importar arquivo';
+        toast.error(errorMessage);
+        throw error; // Re-throw para que o código chamador possa tratar o erro
     }
 }
 
