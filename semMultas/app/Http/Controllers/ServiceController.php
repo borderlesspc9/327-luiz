@@ -102,14 +102,16 @@ class ServiceController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Service $service)
+    public function update(ServiceRequest $request, Service $service)
     {
         try{
-            $payload = $request->all();
+            $payload = $request->validated();
 
             $service = $this->globalRepository->update($payload, $service->id);
 
-            $service->processFields()->sync($payload['process_fields']);
+            if (isset($payload['process_fields'])) {
+                $service->processFields()->sync($payload['process_fields']);
+            }
 
             return $this->defaultResponse->successWithContent('Serviço atualizado com sucesso!', 201, $service);
         } catch (\Exception $e) {

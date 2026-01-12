@@ -16,6 +16,11 @@ const router = createRouter({
       component: () => import('@/views/pages/auth/Login.vue')
     },
     {
+      path: '/register',
+      name: 'register',
+      component: () => import('@/views/pages/auth/Register.vue')
+    },
+    {
       path: '/logout',
       name: 'logout',
       component: () => import('@/views/pages/auth/Logout.vue')
@@ -88,8 +93,8 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   const token = cache.getToken();
 
-  // If user is already logged in and tries to access login, redirect to dashboard
-  if (to.name === 'login' && token) {
+  // If user is already logged in and tries to access login or register, redirect to dashboard
+  if ((to.name === 'login' || to.name === 'register') && token) {
     try {
       const decodedToken = jwtDecode(token);
       const currentTime = Date.now() / 1000;
@@ -97,12 +102,12 @@ router.beforeEach((to, from, next) => {
         return next({ name: 'dashboard' });
       }
     } catch {
-      // Token is invalid, allow access to login
+      // Token is invalid, allow access to login/register
     }
   }
 
-  // Allow access to login and logout without authentication
-  if (to.name === 'login' || to.name === 'logout') {
+  // Allow access to login, register and logout without authentication
+  if (to.name === 'login' || to.name === 'register' || to.name === 'logout') {
     return next();
   }
 

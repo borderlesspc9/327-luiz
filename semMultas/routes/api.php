@@ -28,8 +28,8 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::middleware(JWTMiddleware::class)->group(function () {
     Route::get('logout', [AuthController::class, 'logout']);
     
-    Route::post('/import/all', [ImportDataController::class, 'all'])->middleware([PermissionMiddleware::class.':Export data']);
-    Route::get('/export/all', [ExportController::class, 'all'])->middleware([PermissionMiddleware::class.':Import data']);
+    Route::post('/import/all', [ImportDataController::class, 'all'])->middleware([PermissionMiddleware::class.':Import data']);
+    Route::get('/export/all', [ExportController::class, 'all'])->middleware([PermissionMiddleware::class.':Export data']);
 
     Route::get('/search', [SearchController::class, 'search']);
 

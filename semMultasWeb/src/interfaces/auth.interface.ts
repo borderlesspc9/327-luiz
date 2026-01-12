@@ -4,8 +4,23 @@ export interface LoginCredentials {
     password: string;
 }
 
+export interface RegisterCredentials {
+    name: string;
+    email: string;
+    password: string;
+}
+
 export interface LoginResponse {
     token: string;
+    user: {
+        id: string;
+        name: string;
+        email: string;
+    };
+}
+
+export interface RegisterResponse {
+    message: string;
     user: {
         id: string;
         name: string;

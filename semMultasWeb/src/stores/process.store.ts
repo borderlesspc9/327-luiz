@@ -61,8 +61,6 @@ export const useProcessStore = defineStore({
                 throw new Error('Slug não pode estar vazio');
             }
             const url = endpoint.withSlug.replace('slug', slug);
-            console.log('ProcessStore.update - URL:', url);
-            console.log('ProcessStore.update - slug:', slug);
             await update(url, data);
             this.index({ without_pagination: 0 });
         },

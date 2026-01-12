@@ -159,10 +159,8 @@ watch(() => form.value.plate, async (newPlate, oldPlate) => {
     }
 });
 
-// Watcher temporário para debug - verificar se updateDeadLine está sendo atualizado
 watch(() => form.value.updateDeadLine, (newValue, oldValue) => {
     if (showUpdateStatusModal.value) {
-        console.log('updateDeadLine changed - newValue:', newValue, 'oldValue:', oldValue, 'type:', typeof newValue);
     }
 });
 
@@ -317,11 +315,9 @@ const handleStatus = async () => {
                     statusTitleToIdMap.value[item.title] = item.id;
                 }
             });
-            console.log('Status titles loaded:', statusTitlesList.value.length, 'items');
         } else {
             statusTitlesList.value = [];
             statusTitleToIdMap.value = {};
-            console.log('No status found. Status object:', status);
         }
     } else {
         // Se não tem permissão, limpar as listas
@@ -410,17 +406,6 @@ const actions: Action[] = [
                 statusTitle.value = '';
             }
             
-            console.log('Edit - item:', item);
-            console.log('Edit - item.slug:', item.slug);
-            console.log('Edit - item.id:', item.id);
-            console.log('Edit - updatedProcessItem.slug:', updatedProcessItem?.slug);
-            console.log('Edit - updatedProcessItem.id:', updatedProcessItem?.id);
-            console.log('Edit - slugToPreserve:', slugToPreserve);
-            console.log('Edit - idToPreserve:', idToPreserve);
-            console.log('Edit - currentProcessSlug.value:', currentProcessSlug.value);
-            console.log('Edit - currentProcessId.value:', currentProcessId.value);
-            console.log('Edit - form.value.slug:', form.value.slug);
-            console.log('Edit - form.value.id:', form.value.id);
             
             await loadAgencies();
             await handleStatus(); // Garantir que os status estão carregados
@@ -510,13 +495,9 @@ const handleAddClick = async () => {
 };
 
 const handleCloseModal = () => {
-  console.log('handleCloseModal - called - isSubmitting:', isSubmitting.value);
-  console.log('handleCloseModal - called - currentProcessId.value:', currentProcessId.value);
-  console.log('handleCloseModal - called - currentProcessSlug.value:', currentProcessSlug.value);
   
   // Não resetar valores se ainda está fazendo submit (evita perder dados)
   if (isSubmitting.value) {
-    console.log('handleCloseModal - Skipping reset because isSubmitting is true');
     return;
   }
   
@@ -526,8 +507,6 @@ const handleCloseModal = () => {
   currentProcessSlug.value = ''; // Limpar slug ao fechar modal
   currentProcessId.value = null; // Limpar ID ao fechar modal
   statusTitle.value = '';
-  console.log('handleCloseModal - after reset - currentProcessId.value:', currentProcessId.value);
-  console.log('handleCloseModal - after reset - currentProcessSlug.value:', currentProcessSlug.value);
 };
 
 const handleModalTitle = () => {
@@ -639,10 +618,6 @@ const handleSubmit = async() => {
     // PRESERVAR valores NO INÍCIO, ANTES de qualquer outra operação
     // Isso é CRÍTICO porque o ModalComponent pode fechar o modal e resetar os valores
     // antes do handleSubmit terminar (já que é assíncrono)
-    console.log('handleSubmit - START - currentProcessId.value:', currentProcessId.value);
-    console.log('handleSubmit - START - currentProcessSlug.value:', currentProcessSlug.value);
-    console.log('handleSubmit - START - form.value.id:', form.value.id);
-    console.log('handleSubmit - START - form.value.slug:', form.value.slug);
     
     const preservedProcessId = currentProcessId.value || form.value.id;
     const preservedProcessSlug = currentProcessSlug.value || form.value.slug;
@@ -684,15 +659,6 @@ const handleSubmit = async() => {
         // Se temos um ID, é definitivamente uma edição
         const isEdit = !!(processId || processSlug);
         
-        console.log('handleSubmit - preservedProcessId:', preservedProcessId);
-        console.log('handleSubmit - preservedProcessSlug:', preservedProcessSlug);
-        console.log('handleSubmit - currentProcessId.value:', currentProcessId.value);
-        console.log('handleSubmit - currentProcessSlug.value:', currentProcessSlug.value);
-        console.log('handleSubmit - form.value.id:', form.value.id);
-        console.log('handleSubmit - form.value.slug:', form.value.slug);
-        console.log('handleSubmit - processId (final):', processId);
-        console.log('handleSubmit - processSlug (final):', processSlug);
-        console.log('handleSubmit - isEdit:', isEdit);
     
     // Prepare payload ensuring deadline_date is in the correct format
         // Remover slug, id e updateDeadLine do payload (não devem ser enviados)
@@ -716,8 +682,6 @@ const handleSubmit = async() => {
             payload.status_id = statusId;
         }
         
-        console.log('handleSubmit - payload:', payload);
-        console.log('handleSubmit - will call:', isEdit ? 'UPDATE' : 'STORE');
         
         // Se é edição mas não temos slug, buscar pelo ID
         if (isEdit && !processSlug && processId) {
@@ -725,15 +689,12 @@ const handleSubmit = async() => {
             const fullProcess = processes.value.data.find((p: any) => p.id === processId);
             if (fullProcess && fullProcess.slug) {
                 processSlug = fullProcess.slug;
-                console.log('handleSubmit - Retrieved slug from full process using ID:', processSlug);
             }
         }
         
         // Usar slug para determinar se é edição ou criação
         // O slug não é enviado no payload, apenas usado para identificar a rota
         if(isEdit && processSlug && processSlug.trim() !== '') {
-            console.log('handleSubmit - Calling UPDATE with slug:', processSlug);
-            console.log('handleSubmit - UPDATE payload:', payload);
             try {
                 await processStore.update(processSlug, payload);
             } catch (error) {
@@ -741,8 +702,6 @@ const handleSubmit = async() => {
                 throw error;
             }
     }else{
-            console.log('handleSubmit - Calling STORE (isEdit:', isEdit, ', processSlug:', processSlug, ')');
-            console.log('handleSubmit - STORE payload:', payload);
         await processStore.store(payload);
     }
     
@@ -805,10 +764,6 @@ const handleSubmitStatus = async() => {
         const preservedUpdateDeadLine = form.value.updateDeadLine === true || form.value.updateDeadLine === 'true' || form.value.updateDeadLine === 1 || form.value.updateDeadLine === '1';
         const preservedDeadlineDate = form.value.deadline_date;
         
-        console.log('handleSubmitStatus - form.value.updateDeadLine (raw):', form.value.updateDeadLine);
-        console.log('handleSubmitStatus - form.value.updateDeadLine (type):', typeof form.value.updateDeadLine);
-        console.log('handleSubmitStatus - preservedUpdateDeadLine:', preservedUpdateDeadLine);
-        console.log('handleSubmitStatus - preservedDeadlineDate:', preservedDeadlineDate);
         
         // Sempre converter statusTitle para status_id quando statusTitle está preenchido
         // Isso garante que se o usuário mudou o título no autocomplete, o ID será atualizado
@@ -824,8 +779,6 @@ const handleSubmitStatus = async() => {
         // Usar o valor preservado em vez do valor atual do form (que pode ter sido resetado)
         const updateDeadLineValue = preservedUpdateDeadLine;
         
-        console.log('handleSubmitStatus - updateDeadLineValue (final):', updateDeadLineValue);
-        console.log('handleSubmitStatus - form.value.deadline_date (current):', form.value.deadline_date);
         
         // Prepare payload ensuring deadline_date is in the correct format when updateDeadLine is true
         const payload: any = {
@@ -840,14 +793,6 @@ const handleSubmitStatus = async() => {
             payload.deadline_date = preservedDeadlineDate 
                 ? formatDateToISO(preservedDeadlineDate) 
                 : null;
-            console.log('handleSubmitStatus - deadline_date will be sent:', payload.deadline_date);
-        } else {
-            console.log('handleSubmitStatus - updateDeadLine is false, deadline_date will NOT be sent');
-        }
-        
-        console.log('handleSubmitStatus - payload:', payload);
-        console.log('handleSubmitStatus - preservedSlug:', preservedSlug);
-        console.log('handleSubmitStatus - currentItem.value:', currentItem.value);
         
         await processStore.update(`update-status/${preservedSlug}`, payload);
         

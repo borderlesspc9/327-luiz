@@ -48,12 +48,6 @@ class RolesPermissionsSeeder extends Seeder
             'Update status',
             'Delete status',
 
-            'Read user',
-            'Create user',
-            'Read user',
-            'Update user',
-            'Delete user',
-
             'Create roles',
             'Read roles',
             'Update roles',
