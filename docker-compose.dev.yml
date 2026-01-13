@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # Backend Laravel (desenvolvimento)
+  backend:
+    build:
+      context: ./semMultas
+      dockerfile: Dockerfile.dev
+    container_name: semmultas_backend_dev
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ./semMultas:/var/www/html
+    networks:
+      - semmultas_network
+    command: php artisan serve --host=0.0.0.0 --port=8000
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_CONNECTION=sqlite
+      - DB_DATABASE=/var/www/html/database/database.sqlite
+
+  # Frontend Vue.js (desenvolvimento)
+  frontend:
+    build:
+      context: ./semMultasWeb
+      dockerfile: Dockerfile.dev
+    container_name: semmultas_frontend_dev
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./semMultasWeb:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000/api
+      - CHOKIDAR_USEPOLLING=true
+    networks:
+      - semmultas_network
+    command: npm run dev -- --host 0.0.0.0
+
+  # SQLite init
+  db:
+    image: alpine:latest
+    container_name: semmultas_db_init
+    volumes:
+      - ./semMultas/database:/database
+    command: sh -c "touch /database/database.sqlite && chmod 666 /database/database.sqlite"
+    networks:
+      - semmultas_network
+
+networks:
+  semmultas_network:
+    driver: bridge
