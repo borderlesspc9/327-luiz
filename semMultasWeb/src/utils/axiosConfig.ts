@@ -5,6 +5,7 @@ const authStore = useAuthStore();
 
 const axiosInstance = axios.create({
     baseURL: import.meta.env.VITE_API_URL,
+    timeout: 30000, // 30 segundos - evita requisições travadas
 });
 
 axiosInstance.interceptors.request.use(

@@ -12,6 +12,7 @@ const endpoint = {
 // Criar instância do axios com token
 const axiosInstance = axios.create({
     baseURL: API_URL,
+    timeout: 30000, // 30 segundos - evita requisições travadas
     headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -36,6 +37,7 @@ class AuthService {
             // Criar instância sem token para registro (rota pública)
             const registerAxios = axios.create({
                 baseURL: API_URL,
+                timeout: 30000, // 30 segundos - evita requisições travadas
                 headers: {
                     'Content-Type': 'application/json'
                 }
