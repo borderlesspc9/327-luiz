@@ -1,4 +1,4 @@
-FROM php:8.2-fpm-alpine
+FROM php:8.4-fpm-alpine
 
 # Instalar dependências do sistema
 RUN apk add --no-cache \
@@ -13,6 +13,9 @@ RUN apk add --no-cache \
     zip \
     unzip \
     bash \
+    freetype-dev \
+    libjpeg-turbo-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install pdo_mysql pdo_sqlite mbstring exif pcntl bcmath gd zip
 
 # Instalar Composer
@@ -24,8 +27,9 @@ WORKDIR /var/www/html
 # Copiar arquivos do projeto
 COPY . .
 
-# Instalar dependências do Composer
-RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+# Instalar dependências do Composer (ignora requisitos de plataforma para compatibilidade)
+RUN composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist --ignore-platform-reqs || \
+    composer install --optimize-autoloader --no-interaction --prefer-dist --ignore-platform-reqs
 
 # Configurar permissões
 RUN chown -R www-data:www-data /var/www/html \

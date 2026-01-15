@@ -793,6 +793,7 @@ const handleSubmitStatus = async() => {
             payload.deadline_date = preservedDeadlineDate 
                 ? formatDateToISO(preservedDeadlineDate) 
                 : null;
+        }
         
         await processStore.update(`update-status/${preservedSlug}`, payload);
         
